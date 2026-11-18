@@ -109,3 +109,91 @@ nessun id consumato due volte.
 - `int` basta per i volumi didattici. Limite noto: i parametri della TUI devono avere un massimo.
 - Pillola come costante e non `null`: le code bloccanti della libreria standard rifiutano `null`;
   inoltre `null` non dice nulla, una costante con un nome sì.
+
+### D5. `Buffer`: interfaccia minima, specifica per `Item`, interrompibile
+
+**Decisione:**
+- Package `producerconsumer.buffer`. Tre metodi: `put(Item)`, `take()`, `capacity()`.
+- `put` e `take` dichiarano `throws InterruptedException`.
+- Nessun `size()` / `isEmpty()`.
+- Nessun generic: il buffer contiene solo `Item`.
+- `take()` non restituisce mai `null`: su buffer vuoto attende (anche l'implementazione non
+  sincronizzata, che attende in polling).
+
+**Motivazione:**
+- `InterruptedException` dichiarata → quando il timeout (D2) interrompe un thread bloccato,
+  l'eccezione risale fino al ciclo di `run()` e il thread termina. Catturarla dentro il buffer
+  la farebbe sparire e il thread resterebbe appeso.
+- `size()`/`isEmpty()` invitano al check-then-act (`if (!isEmpty()) take()`): tra controllo e
+  azione un altro thread può cambiare lo stato. La fine della simulazione la segnala la poison
+  pill, non un controllo sul buffer. `capacity()` è sicuro perché immutabile.
+- Un solo tipo di elemento → i generics aggiungerebbero complessità senza beneficio.
+- Mai `null` → il consumer non deve distinguere "vuoto" da "item"; la pillola resta l'unico
+  segnale speciale.
+
+### D6. Regole comuni a tutti i buffer
+
+**Decisione:**
+- `put(null)` lancia `NullPointerException` in tutte le implementazioni (`Objects.requireNonNull`).
+- Capacità `<= 0` → `IllegalArgumentException` nel costruttore.
+- Su buffer pieno/vuoto si attende sempre in un `while`, mai in un `if`.
+
+**Motivazione:**
+- Se `put(null)` fosse accettato, `take()` potrebbe restituire `null` e romperebbe D5.
+  `ArrayBlockingQueue` rifiuta già `null`: così tutte le implementazioni si comportano uguale.
+- Al risveglio la condizione va ricontrollata: un altro thread può essere arrivato prima,
+  e la JVM ammette risvegli spuri.
+
+### D7. `UnsafeBuffer`: array circolare, contatore non atomico, attesa in polling
+
+**Decisione:**
+- Array circolare `Item[]` con `head`, `tail`, `count`. Nessun lock.
+- `count` è `volatile`; `count++` e `count--` restano non atomici.
+- Su pieno/vuoto: polling con `Thread.yield()`, controllando a mano `Thread.interrupted()`.
+- Guardie `count >= capacità` e `count <= 0` (non `==`); una cella mai scritta (`null`) viene saltata.
+
+**Motivazione:**
+- Array e non `LinkedList`: una lista modificata da più thread può corrompere i nodi e lanciare
+  eccezioni. L'array sbaglia i conti ma resta valido → persi/duplicati **senza crashare**.
+- `volatile` dà visibilità (il polling non resta su un valore vecchio) ma non atomicità:
+  è esattamente la lezione. Due thread leggono lo stesso `count`, entrambi scrivono `count ± 1`,
+  un aggiornamento sparisce. Il contatore deriva → celle sovrascritte (persi) o rilette (duplicati).
+- Niente `wait()`: richiede di possedere il monitor, cioè sincronizzazione.
+- `yield()` non lancia `InterruptedException`: il controllo manuale mantiene D2 (il timeout ferma i thread).
+- `<=`/`>=`: con il contatore andato negativo, `== 0` non fermerebbe più i consumer.
+
+### D8. `MonitorBuffer` e `LockBuffer`: stessa logica, primitive diverse
+
+**Decisione:**
+- `MonitorBuffer`: `synchronized` + `wait()` + `notifyAll()`, `LinkedList` come coda.
+- `LockBuffer`: `ReentrantLock` + due `Condition` (`notFull`, `notEmpty`) + `signal()`,
+  `unlock()` sempre in `finally`.
+
+**Motivazione:**
+- Monitor: una sola coda di attesa per producer e consumer. `notify()` potrebbe svegliare un thread
+  della categoria sbagliata e lasciare dormire chi serve → serve `notifyAll()`.
+- Lock: due code separate → su `notEmpty` attendono solo consumer, e un `put` aggiunge un solo item,
+  quindi basta svegliarne uno con `signal()`.
+- `finally`: senza, un'eccezione lascerebbe il lock preso per sempre.
+- Si usa `lock()` (non `lockInterruptibly()`): l'attesa lunga è su `await()`, che è già interrompibile.
+
+### D9. `BlockingQueueBuffer`: delega a `ArrayBlockingQueue`
+
+**Decisione:** adattatore che inoltra `put`/`take` a una `ArrayBlockingQueue<Item>`.
+
+**Motivazione:** mostra che la libreria standard risolve il problema già con lock e condizioni interne
+(come D8). Nel codice reale si usa questa. Capacità fissa come gli altri buffer (non `LinkedBlockingQueue`,
+che di default è illimitata).
+
+### Test dei buffer
+
+- `BufferTest` (astratta): contratto comune — FIFO, capacità, `null`, wrap-around, attesa su
+  pieno/vuoto, interruzione. Ogni buffer ha una sottoclasse che dice solo come crearlo.
+- `SynchronizedBufferTest` (astratta, estende `BufferTest`): invariante concorrente per i buffer
+  corretti — 4 producer, 3 consumer, ogni item consumato esattamente una volta.
+- Risposta alla questione aperta di D3: un test "si blocca" verifica che il thread sia **ancora vivo**
+  dopo un'attesa, proprietà vera in qualunque interleaving.
+- `UnsafeBuffer` non ha un test di race: le perdite variano molto tra esecuzioni (misurate
+  ~400–3500 su 10000 item, anche con 1 producer e 1 consumer). Verrà verificato dalla simulazione,
+  asserendo solo "nessuna eccezione". La poison pill stessa può andare persa → il consumer resta in
+  attesa e serve il timeout di D2.
