@@ -1,29 +1,26 @@
 package producerconsumer.buffer;
 
-import java.util.Objects;
-
 import producerconsumer.model.Item;
 
 /**
- * Buffer volutamente NON sincronizzato: mostra cosa succede senza mutua esclusione.
+ * Buffer non sincronizzato, senza mutua esclusione. Non thread-safe per scelta.
  *
- * Array circolare con indici head/tail e un contatore count. Le operazioni
- * count++ e count-- non sono atomiche (leggi, modifica, scrivi): due thread
- * possono sovrapporsi e il contatore smette di corrispondere al contenuto reale.
- * Risultato: item sovrascritti prima di essere letti (persi) o letti due volte (duplicati).
+ * Array circolare con indici head/tail e contatore count. count++ e count-- non
+ * sono atomiche (lettura, modifica, scrittura): con accessi concorrenti il contatore
+ * diverge dal contenuto reale. Effetti: item sovrascritti prima della lettura (persi)
+ * o letti più volte (duplicati).
  *
- * Su buffer pieno o vuoto attende in polling (non può usare wait senza un lock).
- * Usa un array e non una LinkedList: una lista modificata da più thread insieme
- * può corrompersi e lanciare eccezioni, l'array no. Così lo scenario sbaglia
- * i conti ma non crasha.
+ * Attesa su buffer pieno/vuoto in polling: wait() richiede il possesso del monitor.
+ * Struttura ad array e non LinkedList: una lista modificata concorrentemente può
+ * corrompere i nodi e lanciare eccezioni; l'array resta sempre in uno stato valido.
  */
 public class UnsafeBuffer implements Buffer {
 
     private final Item[] items;
     private int head;
     private int tail;
-    // volatile: garantisce la visibilità tra thread (il polling vede sempre il valore aggiornato),
-    // NON l'atomicità di count++ e count--. È proprio questo il difetto da mostrare.
+    // volatile: garantisce la visibilità tra thread (il polling legge sempre l'ultimo valore scritto),
+    // non l'atomicità di count++ e count--.
     private volatile int count;
 
     public UnsafeBuffer(int capacity) {
@@ -38,7 +35,9 @@ public class UnsafeBuffer implements Buffer {
 
     @Override
     public void put(Item item) throws InterruptedException {
-        Objects.requireNonNull(item);
+        if (item == null) {
+            throw new NullPointerException("item must not be null");
+        }
         while (count >= items.length) {
             pause();
         }
@@ -54,8 +53,9 @@ public class UnsafeBuffer implements Buffer {
                 pause();
             }
             Item item = items[head];
-            // null solo se la cella non è mai stata scritta: il contatore mente, si riprova
+            // null solo se la cella non è mai stata scritta (count non coerente): nuovo tentativo
             if (item != null) {
+                // la cella non viene svuotata: con count più alto del reale viene riletta (duplicato)
                 head = (head + 1) % items.length;
                 count--;
                 return item;
@@ -70,8 +70,10 @@ public class UnsafeBuffer implements Buffer {
     }
 
     /**
-     * Un giro di attesa attiva. Controlla l'interruzione a mano, perché
-     * Thread.yield() a differenza di wait() non lancia InterruptedException.
+     * Singola iterazione di attesa attiva. Il controllo dell'interruzione è esplicito:
+     * Thread.yield(), a differenza di wait(), non lancia InterruptedException.
+     *
+     * @throws InterruptedException se il thread è stato interrotto
      */
     private void pause() throws InterruptedException {
         if (Thread.interrupted()) {

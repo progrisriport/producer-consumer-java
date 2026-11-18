@@ -1,7 +1,6 @@
 package producerconsumer.buffer;
 
 import java.util.LinkedList;
-import java.util.Objects;
 
 import producerconsumer.model.Item;
 
@@ -25,15 +24,17 @@ public class MonitorBuffer implements Buffer {
 
     @Override
     public synchronized void put(Item item) throws InterruptedException {
-        Objects.requireNonNull(item);
+        if (item == null) {
+            throw new NullPointerException("item must not be null");
+        }
         // while e non if: al risveglio la condizione va ricontrollata
-        // (un altro thread può aver riempito il buffer prima di noi, o risveglio spurio)
+        // (il buffer può essere stato riempito da un altro thread, o il risveglio può essere spurio)
         while (queue.size() == capacity) {
             wait();
         }
         queue.addLast(item);
-        // notifyAll e non notify: nella stessa coda di attesa ci sono sia producer che consumer,
-        // notify potrebbe svegliare un altro producer e lasciare i consumer addormentati
+        // notifyAll e non notify: producer e consumer condividono la stessa coda di attesa,
+        // notify può risvegliare un producer e lasciare in attesa tutti i consumer
         notifyAll();
     }
 

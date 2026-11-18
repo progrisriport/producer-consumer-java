@@ -58,7 +58,7 @@ Benchmark, GUI, salvataggio risultati su file.
 **Decisione:** ogni elemento prodotto ha un id unico, generato da un contatore condiviso da tutti
 i producer (non un contatore per producer).
 
-**Motivazione:** per misurare persi e duplicati devo distinguere ogni elemento. Con un contatore
+**Motivazione:** per misurare persi e duplicati ogni elemento deve essere distinguibile. Con un contatore
 per producer due producer generano lo stesso id e un "duplicato" diventa indistinguibile da due
 elementi diversi.
 
@@ -134,7 +134,7 @@ nessun id consumato due volte.
 ### D6. Regole comuni a tutti i buffer
 
 **Decisione:**
-- `put(null)` lancia `NullPointerException` in tutte le implementazioni (`Objects.requireNonNull`).
+- `put(null)` lancia `NullPointerException` in tutte le implementazioni, con un `if` esplicito (`ArrayBlockingQueue` lo fa già da sé).
 - Capacità `<= 0` → `IllegalArgumentException` nel costruttore.
 - Su buffer pieno/vuoto si attende sempre in un `while`, mai in un `if`.
 
@@ -151,15 +151,17 @@ nessun id consumato due volte.
 - `count` è `volatile`; `count++` e `count--` restano non atomici.
 - Su pieno/vuoto: polling con `Thread.yield()`, controllando a mano `Thread.interrupted()`.
 - Guardie `count >= capacità` e `count <= 0` (non `==`); una cella mai scritta (`null`) viene saltata.
+- Le celle non vengono svuotate dopo `take`: con `count` più alto del reale una cella già letta
+  viene riletta (duplicato).
 
 **Motivazione:**
 - Array e non `LinkedList`: una lista modificata da più thread può corrompere i nodi e lanciare
-  eccezioni. L'array sbaglia i conti ma resta valido → persi/duplicati **senza crashare**.
-- `volatile` dà visibilità (il polling non resta su un valore vecchio) ma non atomicità:
-  è esattamente la lezione. Due thread leggono lo stesso `count`, entrambi scrivono `count ± 1`,
-  un aggiornamento sparisce. Il contatore deriva → celle sovrascritte (persi) o rilette (duplicati).
-- Niente `wait()`: richiede di possedere il monitor, cioè sincronizzazione.
-- `yield()` non lancia `InterruptedException`: il controllo manuale mantiene D2 (il timeout ferma i thread).
+  eccezioni. L'array resta sempre in uno stato valido → persi/duplicati **senza eccezioni**.
+- `volatile` garantisce visibilità (il polling legge l'ultimo valore scritto), non atomicità.
+  Due thread leggono lo stesso `count`, entrambi scrivono `count ± 1`: un aggiornamento
+  va perso. Il contatore diverge → celle sovrascritte (persi) o rilette (duplicati).
+- Niente `wait()`: richiede il possesso del monitor, quindi sincronizzazione.
+- `yield()` non lancia `InterruptedException`: il controllo esplicito di `Thread.interrupted()` preserva D2 (il timeout interrompe i thread).
 - `<=`/`>=`: con il contatore andato negativo, `== 0` non fermerebbe più i consumer.
 
 ### D8. `MonitorBuffer` e `LockBuffer`: stessa logica, primitive diverse
@@ -181,8 +183,8 @@ nessun id consumato due volte.
 
 **Decisione:** adattatore che inoltra `put`/`take` a una `ArrayBlockingQueue<Item>`.
 
-**Motivazione:** mostra che la libreria standard risolve il problema già con lock e condizioni interne
-(come D8). Nel codice reale si usa questa. Capacità fissa come gli altri buffer (non `LinkedBlockingQueue`,
+**Motivazione:** la libreria standard implementa già il buffer limitato con lock e condizioni interne
+(come D8); è la soluzione da preferire in produzione. Capacità fissa come gli altri buffer (non `LinkedBlockingQueue`,
 che di default è illimitata).
 
 ### Test dei buffer

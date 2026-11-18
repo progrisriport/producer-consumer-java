@@ -1,7 +1,6 @@
 package producerconsumer.buffer;
 
 import java.util.LinkedList;
-import java.util.Objects;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -12,7 +11,7 @@ import producerconsumer.model.Item;
  * Buffer sincronizzato con ReentrantLock e due Condition.
  *
  * Differenza rispetto a MonitorBuffer: producer e consumer attendono su due code
- * separate (notFull e notEmpty), quindi si può svegliare solo chi serve.
+ * separate (notFull e notEmpty), quindi ogni segnale risveglia solo thread del tipo corretto.
  */
 public class LockBuffer implements Buffer {
 
@@ -35,7 +34,9 @@ public class LockBuffer implements Buffer {
 
     @Override
     public void put(Item item) throws InterruptedException {
-        Objects.requireNonNull(item);
+        if (item == null) {
+            throw new NullPointerException("item must not be null");
+        }
         lock.lock();
         // try/finally: il lock va rilasciato anche se await lancia InterruptedException
         try {
@@ -43,7 +44,7 @@ public class LockBuffer implements Buffer {
                 notFull.await();
             }
             queue.addLast(item);
-            // signal basta: su notEmpty attendono solo consumer, e c'è un solo item nuovo
+            // signal è sufficiente: su notEmpty attendono solo consumer e il put rende disponibile un solo item
             notEmpty.signal();
         } finally {
             lock.unlock();

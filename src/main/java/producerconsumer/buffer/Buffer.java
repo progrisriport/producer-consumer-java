@@ -12,7 +12,7 @@ public interface Buffer {
      * Inserisce un item nel buffer.
      * Se il buffer è pieno, il thread attende finché si libera un posto.
      *
-     * @throws NullPointerException se item è null (altrimenti take potrebbe restituire null)
+     * @throws NullPointerException se item è null
      * @throws InterruptedException se il thread viene interrotto durante l'attesa
      */
     void put(Item item) throws InterruptedException;
@@ -27,7 +27,7 @@ public interface Buffer {
     Item take() throws InterruptedException;
 
     /**
-     * Numero massimo di item che il buffer può contenere. Non cambia mai.
+     * @return numero massimo di item contenuti, fissato alla costruzione
      */
     int capacity();
 }

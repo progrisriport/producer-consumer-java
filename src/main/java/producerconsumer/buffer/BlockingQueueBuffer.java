@@ -8,8 +8,8 @@ import producerconsumer.model.Item;
 /**
  * Buffer basato su ArrayBlockingQueue della libreria standard.
  *
- * Tutta la sincronizzazione è dentro la coda (internamente: un ReentrantLock e
- * due Condition, come LockBuffer). Questa classe si limita a delegare.
+ * La sincronizzazione è interna alla coda (un ReentrantLock e due Condition,
+ * come LockBuffer). put e take sono delegati.
  */
 public class BlockingQueueBuffer implements Buffer {
 
