@@ -21,7 +21,9 @@ si aggiunge in coda alla propria sezione, con il formato **Decisione / Motivazio
 | D9 | `BlockingQueueBuffer`: delega a `ArrayBlockingQueue` | Classi | implementata |
 | D10 | `IdGenerator`: `AtomicInteger`, id da 0 | Classi | registrata |
 | D11 | `Producer`: thread con quota condivisa | Classi | registrata |
-| D12–D13 | Terminazione e `Consumer` | Classi | in definizione (vedi in fondo) |
+| D12 | Terminazione: poison pill inserite dal coordinatore | Classi | registrata |
+| D13 | `Consumer`: thread con registro locale degli item consumati | Classi | registrata |
+| D14 | Visualizzazione: rallentamento e osservazione dei thread | Simulazione | in definizione (vedi in fondo) |
 
 ## Requisiti
 
@@ -258,6 +260,40 @@ che di default è illimitata).
   usa un insieme e non presuppone id consecutivi.
 - La ripartizione per producer varia tra esecuzioni: si verifica solo il totale.
 
+### D12. Terminazione: poison pill inserite dal coordinatore
+
+**Decisione:** la simulazione attende la fine di tutti i producer con `join()`, poi inserisce nel
+buffer una `Item.POISON` per ogni consumer. Né `Producer` né `Consumer` inseriscono pillole.
+
+**Motivazione:**
+- Il `join()` garantisce che le pillole entrino nel buffer dopo l'ultimo item reale: nessun consumer
+  termina mentre ci sono ancora item in arrivo.
+- Il numero di pillole è esattamente il numero di consumer, indipendentemente dal numero di
+  producer (anche con più consumer che producer).
+- La logica di terminazione è in un solo punto.
+
+**Conseguenze:** nello scenario non sincronizzato una pillola può andare persa; il consumer
+che non la riceve viene fermato dal timeout (D2).
+
+### D13. `Consumer`: thread con registro locale degli item consumati
+
+**Decisione:**
+- Package `producerconsumer.actor`. `Consumer extends Thread`; nome del thread `consumer-<id>`.
+- Ciclo `take()` fino alla ricezione di `Item.POISON`. La pillola non viene registrata e non viene
+  reinserita nel buffer.
+- Ogni item consumato viene aggiunto a una `List<Item>` privata del consumer, letta dopo `join()`.
+- `InterruptedException` catturata in `run()` attorno all'intero ciclo: il thread termina e
+  registra il flag `interrupted`.
+
+**Motivazione:**
+- Lista locale: nessuna sincronizzazione aggiuntiva durante la simulazione, quindi nessuna
+  alterazione dell'interleaving che si misura. `join()` garantisce la visibilità.
+- `Item` intero e non solo l'id: conserva il `producerId` degli item duplicati.
+- Terminazione e interruzione seguono lo stesso schema di `Producer` (D11).
+
+**Conseguenze:** consumati = somma delle dimensioni delle liste; distinti = dimensione dell'insieme
+degli id di tutte le liste.
+
 ### Test dei buffer
 
 - `BufferTest` (astratta): contratto comune — FIFO, capacità, `null`, wrap-around, attesa su
@@ -273,6 +309,10 @@ che di default è illimitata).
 
 ## Decisioni in definizione
 
-Le decisioni D12–D13 (terminazione con poison pill, `Consumer`) sono in corso di
-progettazione e non sono ancora registrate. Vanno aggiunte nella sezione "Classi", dopo D11 e prima di "Test dei buffer",
-mantenendo la numerazione.
+D14 (visualizzazione della simulazione) è rinviata a dopo `Consumer` e simulazione. Vincoli già
+emersi:
+- il nucleo non esegue I/O: l'osservazione avviene dalla TUI;
+- un ritardo per item riduce la sovrapposizione delle operazioni e quindi le perdite nello scenario
+  non sincronizzato: il ritardo deve essere un parametro, con valore 0 per la misura;
+- candidati: ritardo configurabile con campionamento di `Thread.getState()`, oppure eventi
+  notificati a un listener.
