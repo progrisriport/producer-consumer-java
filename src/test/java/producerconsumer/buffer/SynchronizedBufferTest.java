@@ -14,7 +14,7 @@ import producerconsumer.model.Item;
 
 /**
  * Contratto in più per i buffer corretti: con N producer e M consumer
- * ogni item prodotto viene consumato esattamente una volta (invariante D3).
+ * ogni item prodotto viene consumato esattamente una volta (invariante).
  */
 abstract class SynchronizedBufferTest extends BufferTest {
 

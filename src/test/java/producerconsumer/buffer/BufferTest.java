@@ -14,7 +14,7 @@ import producerconsumer.model.Item;
  * Contratto comune a tutti i buffer. Ogni implementazione ha una sottoclasse
  * che dice solo come crearla; i test vengono ereditati.
  *
- * I test "si blocca" non dipendono dall'ordine dei thread (D3): controllano solo che
+ * I test "si blocca" non dipendono dall'ordine dei thread: controllano solo che
  * dopo un'attesa il thread sia ANCORA vivo, cosa vera in qualunque interleaving.
  */
 @Timeout(value = 5, unit = TimeUnit.SECONDS)
