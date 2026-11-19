@@ -1,6 +1,27 @@
 # Producer-Consumer didattico — Design
 
 Requisiti e decisioni di progettazione. Ogni decisione ha la sua motivazione.
+Riferimento tecnico per le classi: [GUIDE.md](GUIDE.md) (inglese).
+
+## Indice delle decisioni
+
+Le decisioni sono numerate in ordine cronologico e non vengono rinumerate. Ogni nuova decisione
+si aggiunge in coda alla propria sezione, con il formato **Decisione / Motivazione / Conseguenze**.
+
+| ID | Titolo | Area | Stato |
+|---|---|---|---|
+| D1 | Identificazione degli elementi: contatore globale | Analisi | registrata |
+| D2 | Rilevamento dei blocchi: rilevamento deadlock + timeout | Analisi | registrata |
+| D3 | Test affidabili: invarianti e timeout | Analisi | registrata |
+| D4 | `Item`: classe immutabile con poison pill come costante | Classi | implementata |
+| D5 | `Buffer`: interfaccia minima, specifica per `Item`, interrompibile | Classi | implementata |
+| D6 | Regole comuni a tutti i buffer | Classi | implementata |
+| D7 | `UnsafeBuffer`: array circolare, contatore non atomico, attesa in polling | Classi | implementata |
+| D8 | `MonitorBuffer` e `LockBuffer`: stessa logica, primitive diverse | Classi | implementata |
+| D9 | `BlockingQueueBuffer`: delega a `ArrayBlockingQueue` | Classi | implementata |
+| D10 | `IdGenerator`: `AtomicInteger`, id da 0 | Classi | registrata |
+| D11 | `Producer`: thread con quota condivisa | Classi | registrata |
+| D12–D13 | Terminazione e `Consumer` | Classi | in definizione (vedi in fondo) |
 
 ## Requisiti
 
@@ -187,6 +208,56 @@ nessun id consumato due volte.
 (come D8); è la soluzione da preferire in produzione. Capacità fissa come gli altri buffer (non `LinkedBlockingQueue`,
 che di default è illimitata).
 
+### D10. `IdGenerator`: contatore atomico
+
+**Decisione:**
+- Package `producerconsumer.counter`. Un solo metodo `int next()`, implementato con
+  `AtomicInteger.getAndIncrement()`.
+- Il primo id è 0.
+- Lo stesso generatore (sicuro) è usato in tutti gli scenari, compreso quello non sincronizzato.
+
+**Motivazione:**
+- D1 rende il contatore una risorsa condivisa: `counter++` su un `int` produrrebbe id duplicati.
+- `AtomicInteger` è lock-free e non richiede scelta del monitor.
+- Generatore sempre sicuro → persi e duplicati misurati sono attribuibili solo al buffer.
+- Partenza da 0: comportamento predefinito di `AtomicInteger`; −1 resta riservato alla poison pill (D4).
+
+### D11. `Producer`: thread con quota condivisa
+
+**Decisione:**
+- Package `producerconsumer.actor`. `Producer extends Thread`; nome del thread `producer-<id>`.
+- Numero di item non fissato per producer: i producer attingono a una `Quota` condivisa
+  (package `producerconsumer.counter`) con un solo metodo `boolean tryAcquire()`, implementato con
+  un `AtomicInteger` interno. Capacità negativa → `IllegalArgumentException`; capacità 0 ammessa.
+- Ciclo: `tryAcquire()` → `IdGenerator.next()` → `Buffer.put(item)` → incremento di `produced`.
+- `InterruptedException` catturata in `run()` attorno all'intero ciclo: il thread termina e
+  registra il flag `interrupted`.
+- `produced` e `interrupted` sono campi privati scritti solo dal producer, letti dopo `join()`.
+- Il producer non inserisce poison pill (→ D12).
+- "Prodotti" (D1) = somma dei `produced`, non la quota iniziale né il numero di id generati.
+
+**Motivazione:**
+- `extends Thread`: il producer è modellato come processo con proprio ciclo di vita, come nel
+  modello del corso. Limite noto: chiamare `run()` al posto di `start()` esegue il codice nel thread
+  chiamante senza errori.
+- Quota condivisa: distribuzione del carico dinamica, totale fisso indipendente dal numero di producer.
+- Classe `Quota` dedicata: il controllo e il decremento devono essere una sola operazione atomica
+  (altrimenti check-then-act, come in D5). Incapsulandola, il `Producer` non può scrivere la
+  sequenza `get()` + `decrement` separata. `synchronized` sarebbe corretto solo su un monitor condiviso
+  e con il blocco limitato al controllo; l'`AtomicInteger` evita entrambe le scelte.
+- `try` esterno al ciclo: un `try` attorno al solo `put` farebbe proseguire il ciclo dopo l'interruzione.
+- Flag `interrupted`: dopo il timeout (D2) distingue una terminazione regolare da un'interruzione.
+  Il ripristino del flag con `Thread.currentThread().interrupt()` non è richiesto: `run()` è il punto
+  più esterno del thread.
+- `join()` stabilisce happens-before: i campi non richiedono `volatile`.
+- `produced++` dopo `put`: un item il cui `put` è stato interrotto ha consumato un permesso e un id
+  ma non è entrato nel buffer; contarlo lo farebbe risultare perso dal buffer.
+
+**Conseguenze:**
+- Gli id consumati possono avere buchi (id generati ma mai inseriti). Il conteggio dei distinti
+  usa un insieme e non presuppone id consecutivi.
+- La ripartizione per producer varia tra esecuzioni: si verifica solo il totale.
+
 ### Test dei buffer
 
 - `BufferTest` (astratta): contratto comune — FIFO, capacità, `null`, wrap-around, attesa su
@@ -199,3 +270,9 @@ che di default è illimitata).
   ~400–3500 su 10000 item, anche con 1 producer e 1 consumer). Verrà verificato dalla simulazione,
   asserendo solo "nessuna eccezione". La poison pill stessa può andare persa → il consumer resta in
   attesa e serve il timeout di D2.
+
+## Decisioni in definizione
+
+Le decisioni D12–D13 (terminazione con poison pill, `Consumer`) sono in corso di
+progettazione e non sono ancora registrate. Vanno aggiunte nella sezione "Classi", dopo D11 e prima di "Test dei buffer",
+mantenendo la numerazione.
