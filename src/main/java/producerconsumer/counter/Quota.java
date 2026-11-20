@@ -17,7 +17,7 @@ public final class Quota {
      */
     public Quota(int permits) {
         if (permits < 0) {
-            throw new IllegalArgumentException("permits deve essere >= 0: " + permits);
+            throw new IllegalArgumentException("permits must be >= 0: " + permits);
         }
         this.remaining = new AtomicInteger(permits);
     }
