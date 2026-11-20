@@ -24,6 +24,7 @@ si aggiunge in coda alla propria sezione, con il formato **Decisione / Motivazio
 | D12 | Terminazione: poison pill inserite dal coordinatore | Classi | registrata |
 | D13 | `Consumer`: thread con registro locale degli item consumati | Classi | registrata |
 | D14 | Visualizzazione: rallentamento e osservazione dei thread | Simulazione | in definizione (vedi in fondo) |
+| D15 | Simulazione: `Scenario`, `Simulation`, configurazione e risultato | Simulazione | registrata |
 
 ## Requisiti
 
@@ -293,6 +294,49 @@ che non la riceve viene fermato dal timeout (D2).
 
 **Conseguenze:** consumati = somma delle dimensioni delle liste; distinti = dimensione dell'insieme
 degli id di tutte le liste.
+
+### D15. Simulazione: `Scenario`, `Simulation`, configurazione e risultato
+
+**Decisione:**
+- Package `producerconsumer.simulation`.
+- `Simulation` esegue un run con thread su un `Buffer` dato. Gli scenari (interfaccia `Scenario`,
+  da definire) scelgono il buffer e delegano a `Simulation`; sequenziale e deadlock sono scenari
+  con logica propria.
+- `SimulationConfig`: classe immutabile con producer, consumer, item totali, capacità del buffer,
+  timeout. Valida i valori nel costruttore (`IllegalArgumentException`); i limiti sono costanti
+  pubbliche:
+
+  | parametro | min | max |
+  |---|---|---|
+  | producer | 1 | 50 |
+  | consumer | 1 | 50 |
+  | item totali | 0 | 1.000.000 |
+  | capacità | 1 | 1.000 |
+  | timeout (ms) | 100 | 60.000 |
+
+- `SimulationResult`: totali (prodotti, consumati, distinti, persi, duplicati), dettaglio per
+  thread (nome, conteggio, interruzione), item duplicati con numero di occorrenze, esito del
+  timeout, thread in deadlock, thread non terminati, durata. Gli item persi sono solo contati.
+- Timeout con scadenza unica: ogni attesa del thread chiamante usa il tempo residuo; le pillole
+  (D12) sono inserite da un thread dedicato (`terminator`), atteso anch'esso con il tempo residuo.
+  Alla scadenza: rilevamento deadlock con `ThreadMXBean.findDeadlockedThreads()`, interruzione dei
+  thread vivi, attesa di un margine fisso (1 s), registrazione dei thread ancora vivi.
+- Tutti i thread della simulazione sono daemon.
+
+**Motivazione:**
+- Logica dei thread (avvio, `join`, pillole, timeout) in un solo punto; il menu tratta tutti gli
+  scenari in modo uniforme.
+- Configurazione in un solo oggetto: niente liste di `int` scambiabili; limiti riusabili dalla TUI.
+- Calcoli nel nucleo, testabili; la TUI mostra soltanto. I persi non sono elencabili perché
+  `Producer` conta gli item ma non li registra.
+- Il thread chiamante non esegue mai attese senza limite: un `put` della pillola su buffer pieno,
+  con consumer bloccati, lo bloccherebbe per sempre.
+- Un thread `BLOCKED` su un monitor non risponde a `interrupt()`: in un deadlock sui monitor i
+  thread non terminano. Il rilevamento avviene prima dell'interruzione; i thread daemon non
+  impediscono la chiusura della JVM.
+
+**Conseguenze:** dopo un deadlock sui monitor i thread coinvolti restano vivi fino all'uscita
+dall'applicazione. Lo scenario di deadlock dovrà preferire lock interrompibili.
 
 ### Test dei buffer
 
