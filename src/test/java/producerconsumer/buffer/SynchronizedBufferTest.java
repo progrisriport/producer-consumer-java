@@ -30,26 +30,32 @@ abstract class SynchronizedBufferTest extends BufferTest {
 
         for (int p = 0; p < PRODUCERS; p++) {
             int producerId = p;
-            threads.add(new Thread(() -> {
-                try {
-                    for (int i = 0; i < ITEMS_PER_PRODUCER; i++) {
-                        buffer.put(new Item(i, producerId));
+            threads.add(new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        for (int i = 0; i < ITEMS_PER_PRODUCER; i++) {
+                            buffer.put(new Item(i, producerId));
+                        }
+                    } catch (InterruptedException e) {
+                        // fine del test
                     }
-                } catch (InterruptedException e) {
-                    // fine del test
                 }
             }));
         }
         for (int c = 0; c < CONSUMERS; c++) {
-            threads.add(new Thread(() -> {
-                try {
-                    Item item = buffer.take();
-                    while (!item.isPoison()) {
-                        consumed.add(item);
-                        item = buffer.take();
+            threads.add(new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Item item = buffer.take();
+                        while (!item.isPoison()) {
+                            consumed.add(item);
+                            item = buffer.take();
+                        }
+                    } catch (InterruptedException e) {
+                        // fine del test
                     }
-                } catch (InterruptedException e) {
-                    // fine del test
                 }
             }));
         }

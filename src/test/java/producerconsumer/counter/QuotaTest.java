@@ -42,7 +42,12 @@ class QuotaTest {
 
     @Test
     void rejectsNegativePermits() {
-        assertThrows(IllegalArgumentException.class, () -> new Quota(-1));
+        try {
+            new Quota(-1);
+            fail("expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
     }
 
     /**
@@ -58,9 +63,12 @@ class QuotaTest {
 
         List<Thread> workers = new ArrayList<>();
         for (int t = 0; t < threads; t++) {
-            Thread worker = new Thread(() -> {
-                while (quota.tryAcquire()) {
-                    granted.incrementAndGet();
+            Thread worker = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    while (quota.tryAcquire()) {
+                        granted.incrementAndGet();
+                    }
                 }
             });
             workers.add(worker);

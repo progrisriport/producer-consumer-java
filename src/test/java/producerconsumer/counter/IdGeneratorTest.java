@@ -52,9 +52,12 @@ class IdGeneratorTest {
 
         List<Thread> workers = new ArrayList<>();
         for (int t = 0; t < threads; t++) {
-            Thread worker = new Thread(() -> {
-                for (int i = 0; i < callsPerThread; i++) {
-                    ids.add(generator.next());
+            Thread worker = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    for (int i = 0; i < callsPerThread; i++) {
+                        ids.add(generator.next());
+                    }
                 }
             });
             workers.add(worker);

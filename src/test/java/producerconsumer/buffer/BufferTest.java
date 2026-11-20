@@ -40,14 +40,29 @@ abstract class BufferTest {
 
     @Test
     void rejectsNonPositiveCapacity() {
-        assertThrows(IllegalArgumentException.class, () -> createBuffer(0));
-        assertThrows(IllegalArgumentException.class, () -> createBuffer(-1));
+        try {
+            createBuffer(0);
+            fail("expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
+        try {
+            createBuffer(-1);
+            fail("expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
     }
 
     @Test
-    void rejectsNullItem() {
+    void rejectsNullItem() throws InterruptedException {
         Buffer buffer = createBuffer(1);
-        assertThrows(NullPointerException.class, () -> buffer.put(null));
+        try {
+            buffer.put(null);
+            fail("expected NullPointerException");
+        } catch (NullPointerException e) {
+            // expected
+        }
     }
 
     @Test
@@ -62,11 +77,14 @@ abstract class BufferTest {
     @Test
     void takeWaitsWhileEmpty() throws InterruptedException {
         Buffer buffer = createBuffer(1);
-        Thread consumer = new Thread(() -> {
-            try {
-                buffer.take();
-            } catch (InterruptedException e) {
-                // fine del test
+        Thread consumer = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    buffer.take();
+                } catch (InterruptedException e) {
+                    // fine del test
+                }
             }
         });
         consumer.start();
@@ -82,11 +100,14 @@ abstract class BufferTest {
     void putWaitsWhileFull() throws InterruptedException {
         Buffer buffer = createBuffer(1);
         buffer.put(new Item(1, 0));
-        Thread producer = new Thread(() -> {
-            try {
-                buffer.put(new Item(2, 0));
-            } catch (InterruptedException e) {
-                // fine del test
+        Thread producer = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    buffer.put(new Item(2, 0));
+                } catch (InterruptedException e) {
+                    // fine del test
+                }
             }
         });
         producer.start();
@@ -102,11 +123,14 @@ abstract class BufferTest {
     void interruptStopsWaitingTake() throws InterruptedException {
         Buffer buffer = createBuffer(1);
         AtomicBoolean interrupted = new AtomicBoolean(false);
-        Thread consumer = new Thread(() -> {
-            try {
-                buffer.take();
-            } catch (InterruptedException e) {
-                interrupted.set(true);
+        Thread consumer = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    buffer.take();
+                } catch (InterruptedException e) {
+                    interrupted.set(true);
+                }
             }
         });
         consumer.start();
@@ -122,11 +146,14 @@ abstract class BufferTest {
         Buffer buffer = createBuffer(1);
         buffer.put(new Item(1, 0));
         AtomicBoolean interrupted = new AtomicBoolean(false);
-        Thread producer = new Thread(() -> {
-            try {
-                buffer.put(new Item(2, 0));
-            } catch (InterruptedException e) {
-                interrupted.set(true);
+        Thread producer = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    buffer.put(new Item(2, 0));
+                } catch (InterruptedException e) {
+                    interrupted.set(true);
+                }
             }
         });
         producer.start();

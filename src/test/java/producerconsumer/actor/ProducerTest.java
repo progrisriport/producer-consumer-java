@@ -112,7 +112,9 @@ class ProducerTest {
         producer.start();
         producer.join();
 
-        assertTrue(buffer.items.stream().noneMatch(Item::isPoison), "il producer non inserisce la pillola");
+        for (Item item : buffer.items) {
+            assertFalse(item.isPoison(), "il producer non inserisce la pillola");
+        }
     }
 
     @Test
@@ -151,7 +153,10 @@ class ProducerTest {
             producer.join();
         }
 
-        int totalProduced = producers.stream().mapToInt(Producer::getProduced).sum();
+        int totalProduced = 0;
+        for (Producer producer : producers) {
+            totalProduced += producer.getProduced();
+        }
         assertEquals(permits, totalProduced);
         assertEquals(permits, buffer.items.size());
 
@@ -161,8 +166,12 @@ class ProducerTest {
         }
 
         for (int id = 1; id <= 3; id++) {
-            int producerId = id;
-            long inBuffer = buffer.items.stream().filter(i -> i.getProducerId() == producerId).count();
+            int inBuffer = 0;
+            for (Item item : buffer.items) {
+                if (item.getProducerId() == id) {
+                    inBuffer++;
+                }
+            }
             assertEquals(producers.get(id - 1).getProduced(), inBuffer);
         }
     }

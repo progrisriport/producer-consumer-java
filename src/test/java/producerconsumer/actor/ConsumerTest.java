@@ -87,7 +87,9 @@ class ConsumerTest {
         consumer.start();
         consumer.join();
 
-        assertTrue(consumer.getConsumed().stream().noneMatch(Item::isPoison));
+        for (Item item : consumer.getConsumed()) {
+            assertFalse(item.isPoison());
+        }
     }
 
     @Test
@@ -119,7 +121,12 @@ class ConsumerTest {
         consumer.start();
         consumer.join();
 
-        assertThrows(UnsupportedOperationException.class, () -> consumer.getConsumed().add(new Item(9, 9)));
+        try {
+            consumer.getConsumed().add(new Item(9, 9));
+            fail("expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) {
+            // expected
+        }
     }
 
     /**
