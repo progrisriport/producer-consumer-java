@@ -28,7 +28,6 @@ public final class SimulationResult {
     private final int distinct;
     private final Map<Item, Integer> duplicates;
     private final boolean timedOut;
-    private final List<String> deadlocked;
     private final List<String> notTerminated;
     private final long elapsedMillis;
 
@@ -37,18 +36,16 @@ public final class SimulationResult {
      * @param consumers     esito di ogni consumer
      * @param consumedItems tutti gli item consumati, da tutti i consumer, pillole escluse
      * @param timedOut      true se la simulazione è stata fermata dal timeout
-     * @param deadlocked    nomi dei thread rilevati in deadlock
      * @param notTerminated nomi dei thread ancora vivi al termine
      * @param elapsedMillis durata della simulazione in millisecondi
      */
     public SimulationResult(List<WorkerReport> producers, List<WorkerReport> consumers,
-            List<Item> consumedItems, boolean timedOut, List<String> deadlocked,
-            List<String> notTerminated, long elapsedMillis) {
+            List<Item> consumedItems, boolean timedOut, List<String> notTerminated,
+            long elapsedMillis) {
         this.producers = List.copyOf(producers);
         this.consumers = List.copyOf(consumers);
         this.consumed = consumedItems.size();
         this.timedOut = timedOut;
-        this.deadlocked = List.copyOf(deadlocked);
         this.notTerminated = List.copyOf(notTerminated);
         this.elapsedMillis = elapsedMillis;
 
@@ -117,10 +114,6 @@ public final class SimulationResult {
 
     public boolean isTimedOut() {
         return timedOut;
-    }
-
-    public List<String> getDeadlocked() {
-        return deadlocked;
     }
 
     public List<String> getNotTerminated() {

@@ -3,8 +3,8 @@ package producerconsumer.simulation;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -53,7 +53,6 @@ class SimulationTest {
         assertEquals(4, r.getProducers().size());
         assertEquals(3, r.getConsumers().size());
         assertTrue(r.getNotTerminated().isEmpty());
-        assertTrue(r.getDeadlocked().isEmpty());
     }
 
     @ParameterizedTest(name = "{0}")
@@ -117,7 +116,6 @@ class SimulationTest {
 
         assertTrue(r.isTimedOut());
         assertTrue(r.getNotTerminated().isEmpty(), "thread interrompibili: tutti terminati");
-        assertTrue(r.getDeadlocked().isEmpty());
         for (WorkerReport report : r.getProducers()) {
             assertTrue(report.wasInterrupted(), report.getName());
         }
@@ -128,37 +126,19 @@ class SimulationTest {
     }
 
     /**
-     * Buffer finto: put non fa nulla; take porta i due consumer in deadlock sui monitor
-     * (consumer-1 prende A poi B, consumer-2 prende B poi A). I thread BLOCKED non rispondono
-     * all'interruzione: restano vivi (daemon) dopo il test.
+     * Buffer finto: take attende per sempre e ignora l'interruzione.
+     * I consumer restano vivi (daemon) dopo il test.
      */
-    private static class DeadlockBuffer implements Buffer {
-        private final Object lockA = new Object();
-        private final Object lockB = new Object();
-        private final CountDownLatch bothHoldFirstLock = new CountDownLatch(2);
-
+    private static class IgnoresInterruptBuffer implements Buffer {
         @Override
         public void put(Item item) {
         }
 
         @Override
-        public Item take() throws InterruptedException {
-            boolean first = Thread.currentThread().getName().equals("consumer-1");
-            Object outer;
-            Object inner;
-            if (first) {
-                outer = lockA;
-                inner = lockB;
-            } else {
-                outer = lockB;
-                inner = lockA;
-            }
-            synchronized (outer) {
-                bothHoldFirstLock.countDown();
-                bothHoldFirstLock.await();
-                synchronized (inner) {
-                    return Item.POISON;
-                }
+        public Item take() {
+            while (true) {
+                LockSupport.park();
+                Thread.interrupted();
             }
         }
 
@@ -169,12 +149,11 @@ class SimulationTest {
     }
 
     @Test
-    void detectsMonitorDeadlock() throws InterruptedException {
-        SimulationConfig config = new SimulationConfig(1, 2, 0, 1, 300);
-        SimulationResult r = new Simulation(new DeadlockBuffer(), config).run();
+    void reportsThreadsThatIgnoreInterrupt() throws InterruptedException {
+        SimulationConfig config = new SimulationConfig(1, 2, 0, 1, 200);
+        SimulationResult r = new Simulation(new IgnoresInterruptBuffer(), config).run();
 
         assertTrue(r.isTimedOut());
-        assertTrue(r.getDeadlocked().containsAll(List.of("consumer-1", "consumer-2")));
         assertTrue(r.getNotTerminated().containsAll(List.of("consumer-1", "consumer-2")));
     }
 }

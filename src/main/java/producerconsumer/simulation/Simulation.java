@@ -1,11 +1,7 @@
 package producerconsumer.simulation;
 
-import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import producerconsumer.actor.Consumer;
@@ -22,8 +18,8 @@ import producerconsumer.model.Item;
  * poison pill per consumer da parte di un thread dedicato, attesa dei consumer.
  * Ogni attesa del thread chiamante è limitata dal tempo residuo rispetto a un'unica scadenza.
  *
- * Alla scadenza: rilevamento dei deadlock, interruzione dei thread vivi, attesa di un
- * margine fisso, registrazione dei thread ancora vivi. Tutti i thread sono daemon.
+ * Alla scadenza: interruzione dei thread vivi, attesa di un margine fisso, registrazione
+ * dei thread ancora vivi. Tutti i thread sono daemon.
  *
  * La classe non è un thread: {@link #run()} è eseguito dal thread chiamante.
  * Un'istanza esegue un solo run; il buffer non va riutilizzato tra run diversi.
@@ -97,10 +93,8 @@ public final class Simulation {
             }
         }
 
-        List<String> deadlocked = List.of();
         List<String> notTerminated = List.of();
         if (!completed) {
-            deadlocked = findDeadlocked(all);
             for (Thread thread : all) {
                 if (thread.isAlive()) {
                     thread.interrupt();
@@ -111,7 +105,7 @@ public final class Simulation {
         }
 
         long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-        return buildResult(producers, consumers, !completed, deadlocked, notTerminated, elapsedMillis);
+        return buildResult(producers, consumers, !completed, notTerminated, elapsedMillis);
     }
 
     /** Corpo del thread terminator: una pillola per consumer. */
@@ -148,26 +142,6 @@ public final class Simulation {
         return true;
     }
 
-    /** @return nomi dei thread di {@code threads} che la JVM rileva in deadlock */
-    private static List<String> findDeadlocked(List<Thread> threads) {
-        ThreadMXBean bean = ManagementFactory.getThreadMXBean();
-        long[] ids = bean.findDeadlockedThreads();
-        if (ids == null) {
-            return List.of();
-        }
-        Set<Long> deadlockedIds = new HashSet<>();
-        for (long id : ids) {
-            deadlockedIds.add(id);
-        }
-        List<String> names = new ArrayList<>();
-        for (Thread thread : threads) {
-            if (deadlockedIds.contains(thread.threadId())) {
-                names.add(thread.getName());
-            }
-        }
-        return names;
-    }
-
     private static List<String> aliveNames(List<Thread> threads) {
         List<String> names = new ArrayList<>();
         for (Thread thread : threads) {
@@ -183,7 +157,7 @@ public final class Simulation {
      * Quelli dei thread ancora vivi possono non essere aggiornati.
      */
     private static SimulationResult buildResult(List<Producer> producers, List<Consumer> consumers,
-            boolean timedOut, List<String> deadlocked, List<String> notTerminated, long elapsedMillis) {
+            boolean timedOut, List<String> notTerminated, long elapsedMillis) {
         List<WorkerReport> producerReports = new ArrayList<>();
         for (Producer producer : producers) {
             producerReports.add(new WorkerReport(producer.getName(), producer.getProduced(), producer.wasInterrupted()));
@@ -196,6 +170,6 @@ public final class Simulation {
             consumedItems.addAll(items);
         }
         return new SimulationResult(producerReports, consumerReports, consumedItems,
-                timedOut, deadlocked, notTerminated, elapsedMillis);
+                timedOut, notTerminated, elapsedMillis);
     }
 }

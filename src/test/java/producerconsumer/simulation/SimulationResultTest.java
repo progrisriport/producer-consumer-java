@@ -14,7 +14,7 @@ class SimulationResultTest {
 
     private static SimulationResult result(List<WorkerReport> producers, List<Item> consumed) {
         List<WorkerReport> consumers = List.of(new WorkerReport("consumer-1", consumed.size(), false));
-        return new SimulationResult(producers, consumers, consumed, false, List.of(), List.of(), 10);
+        return new SimulationResult(producers, consumers, consumed, false, List.of(), 10);
     }
 
     @Test
@@ -87,7 +87,7 @@ class SimulationResultTest {
             // expected
         }
         try {
-            r.getDeadlocked().add("x");
+            r.getNotTerminated().add("x");
             fail("expected UnsupportedOperationException");
         } catch (UnsupportedOperationException e) {
             // expected
