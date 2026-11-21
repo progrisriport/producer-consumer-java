@@ -302,6 +302,9 @@ degli id di tutte le liste.
 - `Simulation` esegue un run con thread su un `Buffer` dato. Gli scenari (interfaccia `Scenario`,
   da definire) scelgono il buffer e delegano a `Simulation`; sequenziale e deadlock sono scenari
   con logica propria.
+- `Simulation` non è un thread: `run()` è eseguito dal thread chiamante, che coordina avvio,
+  attese e terminazione. Ogni istanza esegue un solo run; producer, consumer e terminator sono
+  creati a ogni chiamata.
 - `SimulationConfig`: classe immutabile con producer, consumer, item totali, capacità del buffer,
   timeout. Valida i valori nel costruttore (`IllegalArgumentException`); i limiti sono costanti
   pubbliche:
@@ -336,7 +339,9 @@ degli id di tutte le liste.
   impediscono la chiusura della JVM.
 
 **Conseguenze:** dopo un deadlock sui monitor i thread coinvolti restano vivi fino all'uscita
-dall'applicazione. Lo scenario di deadlock dovrà preferire lock interrompibili.
+dall'applicazione. Lo scenario di deadlock dovrà preferire lock interrompibili. Il buffer
+conserva lo stato tra un run e l'altro e un thread non può essere riavviato: ogni run richiede
+un nuovo buffer e una nuova `Simulation`.
 
 ### Test dei buffer
 
