@@ -35,7 +35,6 @@ future entry point `producerconsumer.tui.App` and cannot be run at this stage.
 | 3 | Monitor | `synchronized`, `wait`, `notifyAll` | produced == consumed |
 | 4 | Lock and Condition | `ReentrantLock`, two `Condition`s | produced == consumed |
 | 5 | Blocking queue | `ArrayBlockingQueue` | produced == consumed |
-| 6 | Deadlock | circular lock wait, then a fix | deadlock detected, then resolved |
 
 The buffers used by scenarios 2 to 5 are implemented; the scenarios themselves are planned.
 

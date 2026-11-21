@@ -36,7 +36,6 @@ Without synchronization, thread interleaving is unpredictable and both propertie
 | 3 | Monitor | `MonitorBuffer`: `synchronized`, `wait`, `notifyAll` | produced == consumed | buffer done, scenario planned |
 | 4 | Lock and Condition | `LockBuffer`: `ReentrantLock`, two `Condition`s | produced == consumed | buffer done, scenario planned |
 | 5 | Blocking queue | `BlockingQueueBuffer`: `ArrayBlockingQueue` | produced == consumed | buffer done, scenario planned |
-| 6 | Deadlock | circular wait on locks, then a fix | deadlock detected, then resolved | planned |
 
 ### 2.1 Sequential
 
@@ -78,11 +77,6 @@ so `signal()` suffices. `unlock()` is always invoked in `finally` (D8).
 
 Delegation to `java.util.concurrent.ArrayBlockingQueue`, which implements the same
 lock-and-condition scheme internally. Preferred solution in production code (D9).
-
-### 2.6 Deadlock
-
-Threads waiting on each other in a cycle, detected via `ThreadMXBean.findDeadlockedThreads()`
-and then resolved. The deadlocking setup is not yet designed.
 
 ## 3. Implemented classes
 
@@ -183,8 +177,8 @@ No implementation exists for the components below; their design is recorded in `
 | `Producer` | thread creating items and putting them into a `Buffer` | planned, design in progress |
 | `Consumer` | thread taking items until the poison pill is received | planned, design in progress |
 | `SimulationResult` | counts of produced, consumed, distinct consumed | planned |
-| `Simulation` | runs a scenario with timeout and deadlock detection | planned |
-| Sequential and Deadlock scenarios | scenarios 1 and 6 | planned |
+| `Simulation` | runs a scenario with a timeout | planned |
+| Sequential scenario | scenario 1 | planned |
 | `App` / `Menu` | terminal UI, plain ANSI codes, no library | planned |
 
 ### Result metrics (D1)
@@ -194,11 +188,8 @@ No implementation exists for the components below; their design is recorded in `
 
 ## 5. Blocking detection (D2)
 
-Two complementary mechanisms:
-
-1. `ThreadMXBean.findDeadlockedThreads()` identifies real deadlocks (circular lock waits).
-2. A per-scenario timeout interrupts all threads when exceeded. It covers blocks that are not
-   deadlocks, such as a consumer waiting for an item lost in the unsynchronized scenario.
+A per-scenario timeout interrupts all threads when exceeded. It covers threads blocked
+indefinitely, such as a consumer waiting for an item lost in the unsynchronized scenario.
 
 The application always returns to the menu.
 

@@ -11,7 +11,7 @@ si aggiunge in coda alla propria sezione, con il formato **Decisione / Motivazio
 | ID | Titolo | Area | Stato |
 |---|---|---|---|
 | D1 | Identificazione degli elementi: contatore globale | Analisi | registrata |
-| D2 | Rilevamento dei blocchi: rilevamento deadlock + timeout | Analisi | registrata |
+| D2 | Rilevamento dei blocchi: timeout | Analisi | registrata |
 | D3 | Test affidabili: invarianti e timeout | Analisi | registrata |
 | D4 | `Item`: classe immutabile con poison pill come costante | Classi | implementata |
 | D5 | `Buffer`: interfaccia minima, specifica per `Item`, interrompibile | Classi | implementata |
@@ -25,6 +25,7 @@ si aggiunge in coda alla propria sezione, con il formato **Decisione / Motivazio
 | D13 | `Consumer`: thread con registro locale degli item consumati | Classi | registrata |
 | D14 | Visualizzazione: rallentamento e osservazione dei thread | Simulazione | in definizione (vedi in fondo) |
 | D15 | Simulazione: `Scenario`, `Simulation`, configurazione e risultato | Simulazione | registrata |
+| D16 | Scenari: interfaccia `Scenario` e implementazioni | Simulazione | in definizione |
 
 ## Requisiti
 
@@ -42,14 +43,13 @@ comprese quelle sbagliate.
 3. **Monitor** — `synchronized` + `wait`/`notifyAll`.
 4. **Lock e Condition** — `ReentrantLock` + `Condition`.
 5. **Coda bloccante** — struttura della libreria standard.
-6. **Deadlock** — mostra il deadlock, poi la sua cura.
 
 ### Criteri di successo
 
-- I sei scenari si avviano dal menu.
+- I cinque scenari si avviano dal menu.
 - Gli scenari corretti mostrano prodotti == consumati.
 - Lo scenario non sincronizzato mostra elementi persi/duplicati **senza crashare**.
-- Il deadlock viene rilevato e poi curato; l'app torna sempre al menu.
+- L'app torna sempre al menu.
 - Funziona con qualsiasi numero di producer e consumer (anche più consumer che producer).
 - La suite di test passa in modo affidabile (non "a volte").
 
@@ -92,15 +92,14 @@ elementi diversi.
   - duplicati = consumati − distinti
 - Il contatore è condiviso tra thread → è anch'esso una risorsa concorrente (da risolvere in Fase 5).
 
-### D2. Rilevamento dei blocchi: rilevamento deadlock + timeout
+### D2. Rilevamento dei blocchi: timeout
 
-**Decisione:** due meccanismi complementari.
-1. `ThreadMXBean.findDeadlockedThreads()` per riconoscere un deadlock vero e dirlo all'utente.
-2. Un timeout per ogni scenario come rete di sicurezza: scaduto, i thread vengono interrotti.
+**Decisione:** un timeout per ogni scenario come rete di sicurezza: scaduto, i thread vengono
+interrotti.
 
-**Motivazione:** il rilevamento JVM vede solo l'attesa circolare sui lock. Altri blocchi (es.
-consumer che attende per sempre un elemento perso nello scenario non sincronizzato) non sono
-deadlock e non verrebbero visti. Il timeout garantisce che l'app torni sempre al menu.
+**Motivazione:** un thread può restare bloccato per sempre (es. consumer che attende un
+elemento perso nello scenario non sincronizzato). Il timeout garantisce che l'app torni sempre
+al menu.
 
 ### D3. Test affidabili: invarianti e timeout
 
@@ -300,8 +299,8 @@ degli id di tutte le liste.
 **Decisione:**
 - Package `producerconsumer.simulation`.
 - `Simulation` esegue un run con thread su un `Buffer` dato. Gli scenari (interfaccia `Scenario`,
-  da definire) scelgono il buffer e delegano a `Simulation`; sequenziale e deadlock sono scenari
-  con logica propria.
+  da definire) scelgono il buffer e delegano a `Simulation`; il sequenziale è uno scenario con
+  logica propria.
 - `Simulation` non è un thread: `run()` è eseguito dal thread chiamante, che coordina avvio,
   attese e terminazione. Ogni istanza esegue un solo run; producer, consumer e terminator sono
   creati a ogni chiamata.
@@ -319,11 +318,10 @@ degli id di tutte le liste.
 
 - `SimulationResult`: totali (prodotti, consumati, distinti, persi, duplicati), dettaglio per
   thread (nome, conteggio, interruzione), item duplicati con numero di occorrenze, esito del
-  timeout, thread in deadlock, thread non terminati, durata. Gli item persi sono solo contati.
+  timeout, thread non terminati, durata. Gli item persi sono solo contati.
 - Timeout con scadenza unica: ogni attesa del thread chiamante usa il tempo residuo; le pillole
   (D12) sono inserite da un thread dedicato (`terminator`), atteso anch'esso con il tempo residuo.
-  Alla scadenza: rilevamento deadlock con `ThreadMXBean.findDeadlockedThreads()`, interruzione dei
-  thread vivi, attesa di un margine fisso (1 s), registrazione dei thread ancora vivi.
+  Alla scadenza: interruzione dei thread vivi, attesa di un margine fisso (1 s), registrazione dei thread ancora vivi.
 - Tutti i thread della simulazione sono daemon.
 
 **Motivazione:**
@@ -334,14 +332,52 @@ degli id di tutte le liste.
   `Producer` conta gli item ma non li registra.
 - Il thread chiamante non esegue mai attese senza limite: un `put` della pillola su buffer pieno,
   con consumer bloccati, lo bloccherebbe per sempre.
-- Un thread `BLOCKED` su un monitor non risponde a `interrupt()`: in un deadlock sui monitor i
-  thread non terminano. Il rilevamento avviene prima dell'interruzione; i thread daemon non
+- Un thread che non risponde a `interrupt()` resta vivo dopo il margine: i thread daemon non
   impediscono la chiusura della JVM.
 
-**Conseguenze:** dopo un deadlock sui monitor i thread coinvolti restano vivi fino all'uscita
-dall'applicazione. Lo scenario di deadlock dovrà preferire lock interrompibili. Il buffer
+**Conseguenze:** un thread che non risponde all'interruzione resta vivo fino all'uscita
+dall'applicazione. Il buffer
 conserva lo stato tra un run e l'altro e un thread non può essere riavviato: ogni run richiede
 un nuovo buffer e una nuova `Simulation`.
+
+### D16. Scenari: interfaccia `Scenario` e implementazioni
+
+**Decisione:**
+- Interfaccia `Scenario` con tre metodi:
+  - `String getName()`: nome mostrato nel menu;
+  - `String getDescription()`: breve spiegazione, in italiano, di cosa mostra lo scenario;
+  - `SimulationResult run(SimulationConfig config) throws InterruptedException`.
+- Ogni chiamata a `run` crea un nuovo buffer con la capacità di `config` e una nuova `Simulation`.
+- Scenari basati su buffer: classe astratta `BufferScenario implements Scenario` con nome e
+  descrizione passati al costruttore, metodo astratto `createBuffer(SimulationConfig)` e `run`
+  `final`, che crea il buffer e delega a `Simulation`. Una sottoclasse con nome per scenario.
+- Scenario sequenziale: implementa `Scenario` direttamente, senza thread. Il thread chiamante
+  alterna due fasi finché la quota non è esaurita: produce fino a riempire `UnsafeBuffer`,
+  poi lo svuota. Gli item sono generati con `IdGenerator` e `Quota`. Il risultato contiene un
+  producer (`producer-1`) e un consumer (`consumer-1`), nessun timeout. Il
+  numero di producer e consumer della configurazione non viene usato.
+- Catalogo: classe `Scenarios` non istanziabile con `static List<Scenario> all()`, che
+  restituisce i cinque scenari nell'ordine del menu in una lista non modificabile.
+- Package `producerconsumer.scenario`: `Scenario`, `BufferScenario`, `Scenarios`,
+  `SequentialScenario`, `UnsafeScenario`, `MonitorScenario`, `LockScenario`,
+  `BlockingQueueScenario`.
+
+**Motivazione:**
+- Il menu elenca e avvia gli scenari senza conoscerne il tipo.
+- Nome e spiegazione stanno nella stessa classe: aggiungere uno scenario non richiede modifiche
+  alla TUI. Il nucleo restituisce i testi senza stamparli.
+- `BufferScenario` (template method): l'avvio di `Simulation` è scritto una volta; `run` `final`
+  impedisce alle sottoclassi di riusare un buffer. Ogni sottoclasse dichiara solo nome,
+  descrizione e buffer. Sottoclassi con nome anziché anonime: più semplici da trovare e testare.
+- Sequenziale: con un solo thread un `put` su buffer pieno resterebbe bloccato per sempre,
+  quindi produzione e consumo si alternano. `Simulation` con 1 producer e 1 consumer userebbe
+  comunque tre thread. `UnsafeBuffer` corretto senza concorrenza mostra che gli errori dello
+  scenario non sincronizzato derivano dall'accesso concorrente, non dalla struttura del buffer.
+- Catalogo nel nucleo: elenco e ordine in un solo punto, verificabili con i test; la TUI non
+  dipende dalle singole classi.
+- Package separato: `simulation` resta il motore e non conosce gli scenari; le dipendenze vanno
+  in una sola direzione (`scenario` → `simulation`, `buffer`; TUI → `scenario`). I nomi degli
+  scenari seguono quelli dei buffer.
 
 ### Test dei buffer
 
