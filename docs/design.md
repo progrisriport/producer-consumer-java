@@ -25,7 +25,8 @@ si aggiunge in coda alla propria sezione, con il formato **Decisione / Motivazio
 | D13 | `Consumer`: thread con registro locale degli item consumati | Classi | registrata |
 | D14 | Visualizzazione: rallentamento e osservazione dei thread | Simulazione | in definizione (vedi in fondo) |
 | D15 | Simulazione: `Scenario`, `Simulation`, configurazione e risultato | Simulazione | registrata |
-| D16 | Scenari: interfaccia `Scenario` e implementazioni | Simulazione | in definizione |
+| D16 | Scenari: interfaccia `Scenario` e implementazioni | Simulazione | implementata |
+| D17 | TUI | TUI | in definizione |
 
 ## Requisiti
 
@@ -57,7 +58,8 @@ comprese quelle sbagliate.
 
 - Java 21, Maven, un solo modulo. Package base `producerconsumer`.
 - Unica dipendenza: JUnit 5 (solo test). Nessuna dipendenza runtime.
-- Codice e identificatori in inglese, testi visibili all'utente in italiano.
+- Codice e identificatori in inglese. Testi visibili all'utente in inglese semplice e chiaro,
+  comprensibile anche a chi non è madrelingua.
 - Il nucleo della simulazione non stampa nulla: l'I/O sta solo nella parte TUI.
 - Un test concorrente non deve mai poter bloccare la build.
 - Il vecchio progetto Eclipse resta recuperabile dal tag `v0-eclipse-tui`.
@@ -70,6 +72,7 @@ comprese quelle sbagliate.
   Box-drawing Unicode, header con nome app, footer con scorciatoie sempre presente.
 - Parametri della simulazione modificabili dall'utente.
 - Input non valido: messaggio breve in rosso e nuova richiesta.
+- Colori definiti in un solo punto; marcatore di selezione `>`.
 
 ### Fuori scope
 
@@ -345,7 +348,7 @@ un nuovo buffer e una nuova `Simulation`.
 **Decisione:**
 - Interfaccia `Scenario` con tre metodi:
   - `String getName()`: nome mostrato nel menu;
-  - `String getDescription()`: breve spiegazione, in italiano, di cosa mostra lo scenario;
+  - `String getDescription()`: breve spiegazione, in inglese, di cosa mostra lo scenario;
   - `SimulationResult run(SimulationConfig config) throws InterruptedException`.
 - Ogni chiamata a `run` crea un nuovo buffer con la capacità di `config` e una nuova `Simulation`.
 - Scenari basati su buffer: classe astratta `BufferScenario implements Scenario` con nome e
@@ -391,6 +394,22 @@ un nuovo buffer e una nuova `Simulation`.
   ~400–3500 su 10000 item, anche con 1 producer e 1 consumer). Verrà verificato dalla simulazione,
   asserendo solo "nessuna eccezione". La poison pill stessa può andare persa → il consumer resta in
   attesa e serve il timeout di D2.
+
+## TUI
+
+### D17. TUI: interazione, schermate e stile
+
+**Decisione:**
+- Input a righe: l'utente digita una scelta e preme Invio. Ogni schermata pulisce il terminale
+  (`ESC[2J`) e viene ridisegnata. Le scorciatoie del footer sono tasti seguiti da Invio
+  (es. `1-5 run`, `q quit`).
+
+**Motivazione:**
+- Java senza librerie legge l'input per righe. La lettura tasto per tasto richiede il raw mode
+  (`stty`), non portabile, inaffidabile sotto `mvn exec:java` e difficile da testare; un'uscita
+  anomala lascerebbe il terminale senza eco.
+- Il ridisegno mantiene la struttura header / corpo / footer del design system.
+- Input e output passano da un `Reader` e da un `Writer`: i test sostituiscono il terminale.
 
 ## Decisioni in definizione
 
