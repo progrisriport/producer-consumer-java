@@ -1,21 +1,20 @@
-# Producer-Consumer in Java: Scenarios, Classes, Tests
+# Producer-Consumer in Java: Usage, Scenarios, Classes, Tests
 
 Technical reference for the producer-consumer simulator. Design rationale is recorded in
 [`design.md`](design.md) (Italian); decision identifiers (D1..Dn) below refer to that file.
 
 Requirements: Java 21, Maven. No runtime dependencies (JUnit 5 for tests only).
 
-**Status legend:** `done` = implemented and tested. `planned` = not yet implemented.
-
 ## Contents
 
 1. [Problem](#1-problem)
-2. [Scenarios](#2-scenarios)
-3. [Implemented classes](#3-implemented-classes)
-4. [Planned components](#4-planned-components)
-5. [Blocking detection](#5-blocking-detection)
-6. [Tests](#6-tests)
-7. [Maintenance of this document](#7-maintenance-of-this-document)
+2. [Using the application](#2-using-the-application)
+3. [Scenarios](#3-scenarios)
+4. [Architecture](#4-architecture)
+5. [Classes](#5-classes)
+6. [Termination and timeout](#6-termination-and-timeout)
+7. [Tests](#7-tests)
+8. [Maintenance of this document](#8-maintenance-of-this-document)
 
 ## 1. Problem
 
@@ -27,62 +26,171 @@ Two properties must hold:
 
 Without synchronization, thread interleaving is unpredictable and both properties can be violated.
 
-## 2. Scenarios
+Result metrics (D1), computed from all consumed items:
 
-| # | Scenario | Mechanism | Expected outcome | Status |
-|---|---|---|---|---|
-| 1 | Sequential | single thread | produced == consumed | planned |
-| 2 | Unsynchronized | `UnsafeBuffer`, no locking | items lost and duplicated | buffer done, scenario planned |
-| 3 | Monitor | `MonitorBuffer`: `synchronized`, `wait`, `notifyAll` | produced == consumed | buffer done, scenario planned |
-| 4 | Lock and Condition | `LockBuffer`: `ReentrantLock`, two `Condition`s | produced == consumed | buffer done, scenario planned |
-| 5 | Blocking queue | `BlockingQueueBuffer`: `ArrayBlockingQueue` | produced == consumed | buffer done, scenario planned |
+- lost = produced − distinct consumed
+- duplicated = consumed − distinct consumed
 
-### 2.1 Sequential
+## 2. Using the application
 
-Baseline without concurrency; reference against which concurrent scenarios are compared.
+```bash
+mvn -q compile exec:java
+```
 
-### 2.2 Unsynchronized
+The terminal must support UTF-8 (box-drawing borders) and 24-bit colour. Input is line based:
+every command is a line confirmed with Enter (D17). Every screen has the same structure: header,
+body, one message line, footer with the available keys, prompt `>`.
 
-Demonstrates the absence of mutual exclusion. The shared counter `count` is updated with
-`count++` / `count--`, which are not atomic (read, modify, write). Two threads may read the same
-value and both write `count ± 1`; one update is lost. The counter diverges from the real content:
+### 2.1 Screens
+
+| Screen | Content | Keys |
+|---|---|---|
+| Menu | numbered list of the scenarios | `1`–`5` open, `q` quit |
+| Detail | scenario description and current parameters | Enter run, `p` parameters, `b` back |
+| Parameters | numbered parameters with value and range | `1`–`6` edit, `b` back |
+| Live view | buffer, threads and log boxes, redrawn every 100 ms | Ctrl+C quit |
+| Result | totals, threads, duplicates, verdict | Enter back to the detail |
+
+Editing a parameter: choose its number, then type the new value. An invalid value shows a short
+message in red and the value is asked again; an empty line cancels the edit. Parameters are shared
+by all scenarios, so scenarios can be compared under the same conditions.
+
+### 2.2 Parameters
+
+| # | Parameter | Default | Range |
+|---|---|---|---|
+| 1 | Producers | 3 | 1 to 50 |
+| 2 | Consumers | 2 | 1 to 50 |
+| 3 | Items | 40 | 0 to 1,000,000 |
+| 4 | Buffer capacity | 5 | 1 to 1,000 |
+| 5 | Timeout (ms) | 30,000 | 100 to 60,000 |
+| 6 | Delay (ms) | 200 | 0 to 2,000 |
+
+Ranges are the constants of `SimulationConfig`; defaults are constants of `Theme`.
+
+- **Delay 0** (measuring): the run is executed at full speed; the screen shows "Running ..." and
+  then the result.
+- **Delay above 0** (observing): every producer and consumer pauses for the delay after each
+  successful operation, and the run is shown live. At the end the last frame stays on screen with
+  "Done." (green) or "Stopped by timeout." (red); Enter opens the result.
+
+With the defaults, the correct scenarios take about 4 s, the unsynchronized one about 9 s and the
+sequential one about 16 s (one thread, a pause after every put and every take).
+
+### 2.3 Live view
+
+- **Buffer**: fill bar (one cell per slot, scaled to 20 cells above capacity 20), produced over
+  total, consumed, elapsed time. The fill level is computed from the events (puts − takes): in the
+  unsynchronized scenario it can leave the range [0, capacity], so the bar is clamped while the
+  number is shown as is.
+- **Threads**: one row per thread (at most 10, then "... and N more"), producers first, in numeric
+  order. States, derived from the last event of the thread:
+
+  | State | Meaning |
+  |---|---|
+  | `putting` / `taking` | inside the buffer operation |
+  | `waiting: buffer full` / `waiting: buffer empty` | inside the operation for more than 3× the delay |
+  | `put #id` / `took #id` | operation just completed (first half of the pause) |
+  | `resting` | pausing after the operation |
+  | `done` | shown in the last frame of a run that was not stopped by the timeout |
+
+- **Log**: the last 6 completed operations.
+
+### 2.4 Result
+
+- **Totals**, titled with the scenario name: produced, consumed, distinct, lost, duplicated, elapsed.
+- **Threads**: count per thread on two columns (at most 8 rows, then "... and N more"); `*` marks
+  an interrupted thread; threads still alive after the timeout are listed in red.
+- **Duplicates**, only when present: the first 10 by id, as `#id xN`, then "... and N more".
+- **Verdict**: "Every item consumed exactly once." in green, otherwise the causes in red
+  (lost, duplicated, stopped by timeout, threads still running).
+
+## 3. Scenarios
+
+| # | Scenario | Mechanism | Expected outcome |
+|---|---|---|---|
+| 1 | Sequential | single thread, fill then drain, `UnsafeBuffer` | every item consumed exactly once |
+| 2 | Unsynchronized | `UnsafeBuffer`, no locking | items lost and duplicated, no exceptions |
+| 3 | Monitor | `MonitorBuffer`: `synchronized`, `wait`, `notifyAll` | every item consumed exactly once |
+| 4 | Lock and Condition | `LockBuffer`: `ReentrantLock`, two `Condition`s | every item consumed exactly once |
+| 5 | Blocking queue | `BlockingQueueBuffer`: `ArrayBlockingQueue` | every item consumed exactly once |
+
+### 3.1 Sequential
+
+Baseline without concurrency (D16). The calling thread alternates two phases until the quota is
+exhausted: it fills the buffer, then drains it. With a single thread a `put` on a full buffer would
+wait forever, so the phases alternate instead. The configured numbers of producers and consumers are
+not used: the result reports `producer-1` and `consumer-1`. The timeout is not applied.
+
+The buffer is the same `UnsafeBuffer` as scenario 2: without concurrent access it neither loses nor
+duplicates items, so the errors of scenario 2 come from concurrency, not from the data structure.
+
+### 3.2 Unsynchronized
+
+Demonstrates the absence of mutual exclusion. `count`, `head` and `tail` are updated in three
+separate steps (read, modify, write), which are not atomic. Two threads may read the same value
+and both write it plus one; one update is lost. The counter diverges from the real content:
 
 - a cell is overwritten before being read: the item is **lost**;
 - a cell is read again: the item is **duplicated**.
 
-Measured with 10,000 items:
+Measured with 10,000 items and delay 0:
 
 | Producers / consumers / capacity | Lost | Duplicated |
 |---|---|---|
 | 2 / 2 / 5 | 1091 to 3477 | 1036 to 3193 |
 | 1 / 1 / 5 | 386 | 4089 |
 
+With a positive delay the scenario passes the delay to the buffer as `raceMillis`: a pause between
+the read and the write of each shared field. Without it, the operations (about 1 µs) would almost
+never overlap when slowed down and no error would appear (D14). With the defaults (40 items,
+delay 200 ms) a run typically loses and duplicates a few tens of items.
+
 Results are scheduler-dependent and vary between runs. The poison pill can itself be lost,
-leaving a consumer waiting indefinitely; the simulation timeout terminates the run (section 5).
+leaving a consumer waiting indefinitely; the timeout terminates the run (section 6).
 The scenario is designed to yield wrong results **without throwing exceptions** (D7).
 
-### 2.3 Monitor
+### 3.3 Monitor
 
 Intrinsic lock of the object: `synchronized` methods, `wait()` when the buffer is full or empty,
 `notifyAll()` after each change. Producers and consumers share one wait set; `notify()` could
 wake a thread of the wrong kind and leave the required one asleep (D8).
 
-### 2.4 Lock and Condition
+### 3.4 Lock and Condition
 
 Same logic as the monitor with explicit primitives: a `ReentrantLock` and two conditions,
 `notFull` (producers wait) and `notEmpty` (consumers wait). Each wait set holds one kind of thread,
 so `signal()` suffices. `unlock()` is always invoked in `finally` (D8).
 
-### 2.5 Blocking queue
+### 3.5 Blocking queue
 
 Delegation to `java.util.concurrent.ArrayBlockingQueue`, which implements the same
 lock-and-condition scheme internally. Preferred solution in production code (D9).
 
-## 3. Implemented classes
+## 4. Architecture
 
-Base package: `producerconsumer`.
+Base package: `producerconsumer`. Dependencies go in one direction only:
 
-### 3.1 `model.Item` (done, D4)
+```
+tui ──► scenario ──► simulation ──► actor ──► buffer, counter, model
+ │          │            │            │
+ └──────────┴────────────┴────────────┴──► event ──► model
+```
+
+| Package | Responsibility |
+|---|---|
+| `model` | the exchanged item and the poison pill |
+| `buffer` | the four buffer implementations behind one interface |
+| `counter` | shared id generator and production quota |
+| `actor` | producer and consumer threads |
+| `event` | listener interface for observing operations |
+| `simulation` | configuration, execution of a concurrent run, result |
+| `scenario` | the five scenarios and their catalog |
+| `tui` | terminal interface; the only package that performs I/O |
+
+## 5. Classes
+
+### 5.1 `model.Item` (D4)
 
 Immutable item exchanged between producers and consumers.
 
@@ -94,19 +202,11 @@ Immutable item exchanged between producers and consumers.
 | `POISON` | constant item (`id = -1`, `producerId = -1`) signaling end of production |
 | `isPoison()` | identity comparison with `POISON` (not by value) |
 
-Notes:
-
 - `final` class, `private final` fields: shareable between threads without synchronization.
 - Written as a classic class, not a `record`: `equals`, `hashCode`, `toString` and getters are explicit.
-- `equals` / `hashCode` use `id` and `producerId`.
 - The poison pill is a named constant instead of `null`: standard blocking queues reject `null`.
-- A global (not per-producer) id counter keeps each item distinguishable, required to count
-  lost and duplicated items.
-- `int` ids: adequate for didactic volumes; the UI parameters will need an upper bound.
 
-### 3.2 `buffer.Buffer` (done, D5, D6)
-
-Interface of a bounded buffer of `Item`s.
+### 5.2 `buffer.Buffer` (D5, D6)
 
 ```java
 void put(Item item) throws InterruptedException;  // waits while full; NullPointerException on null
@@ -114,106 +214,179 @@ Item take() throws InterruptedException;          // waits while empty; never re
 int capacity();                                   // fixed at construction
 ```
 
-Notes:
-
-- `InterruptedException` is declared so that a timeout can interrupt a blocked thread; the exception
-  propagates to the `run()` loop and the thread terminates.
+- `InterruptedException` is declared so that the timeout can interrupt a blocked thread.
 - No `size()` / `isEmpty()`: they invite check-then-act races. End of production is signaled
-  by the poison pill, not by inspecting the buffer. `capacity()` is safe because immutable.
-- Not generic: the buffer holds only `Item`.
+  by the poison pill, not by inspecting the buffer.
+- Common rules: `put(null)` throws `NullPointerException`; capacity `<= 0` throws
+  `IllegalArgumentException`; waiting always occurs in a `while` loop, never an `if`.
 
-Rules common to all implementations:
-
-- `put(null)` throws `NullPointerException` (explicit `if`; `ArrayBlockingQueue` already does so).
-- Capacity `<= 0` throws `IllegalArgumentException` in the constructor.
-- Waiting always occurs in a `while` loop, never an `if`: the condition is rechecked after waking
-  (another thread may have acted first; spurious wakeups are permitted).
-
-### 3.3 `buffer.UnsafeBuffer` (done, D7)
+### 5.3 `buffer.UnsafeBuffer` (D7, D14)
 
 Deliberately not thread-safe. Circular array `Item[]` with `head`, `tail`, `count`; no lock.
 
+- `UnsafeBuffer(int capacity, long raceMillis)`: `count`, `head` and `tail` are each updated by
+  reading into a local variable, pausing `raceMillis`, writing. With 0 there is no pause and the
+  update is equivalent to `count++`.
 - `count` is `volatile`: ensures visibility, not atomicity.
-- Waiting by polling with `Thread.yield()`, since `wait()` requires holding a monitor.
-- `Thread.interrupted()` is checked explicitly, as `yield()` does not throw `InterruptedException`.
-- Guards use `>=` and `<=` instead of `==`: once `count` drifts below zero, `== 0` would no longer stop consumers.
+- Waiting by polling with `Thread.yield()`, since `wait()` requires holding a monitor;
+  `Thread.interrupted()` is checked explicitly.
+- Guards use `>=` and `<=` instead of `==`: once `count` drifts below zero, `== 0` would no longer
+  stop consumers.
 - Array instead of `LinkedList`: a list modified concurrently may corrupt its nodes and throw,
-  whereas the array always remains in a valid state.
-- Cells are not cleared after `take`: with `count` above the real value, an already-read cell is read again.
-- A never-written cell (`null`) is skipped.
+  whereas the array always remains in a valid state. Cells are not cleared after `take`, so an
+  already-read cell can be read again; a never-written cell (`null`) is skipped.
 
-### 3.4 `buffer.MonitorBuffer` (done, D8)
-
-`LinkedList` guarded by `synchronized` methods. `put` waits while full, `take` while empty;
-both call `notifyAll()` after modifying the queue.
-
-### 3.5 `buffer.LockBuffer` (done, D8)
-
-`LinkedList` guarded by a `ReentrantLock` with conditions `notFull` and `notEmpty`.
-`put` signals `notEmpty`, `take` signals `notFull`. `lock()` is used rather than `lockInterruptibly()`:
-the long wait occurs in `await()`, which is already interruptible.
-
-### 3.6 `buffer.BlockingQueueBuffer` (done, D9)
-
-Adapter forwarding `put` and `take` to an `ArrayBlockingQueue<Item>`. Fixed capacity, as in the
-other buffers (`LinkedBlockingQueue` is unbounded by default).
-
-### 3.7 Buffer comparison
+### 5.4 `buffer.MonitorBuffer`, `buffer.LockBuffer`, `buffer.BlockingQueueBuffer` (D8, D9)
 
 | Buffer | Synchronization | Wait sets | Correct |
 |---|---|---|---|
 | `UnsafeBuffer` | none (`volatile` counter, polling) | none | no |
-| `MonitorBuffer` | `synchronized` | one (`notifyAll`) | yes |
-| `LockBuffer` | `ReentrantLock` | two (`signal`) | yes |
+| `MonitorBuffer` | `synchronized`, `wait`, `notifyAll` | one | yes |
+| `LockBuffer` | `ReentrantLock`, `notFull` / `notEmpty` | two | yes |
 | `BlockingQueueBuffer` | `ArrayBlockingQueue` internals | two (internal) | yes |
 
-## 4. Planned components
+`LockBuffer` uses `lock()` rather than `lockInterruptibly()`: the long wait occurs in `await()`,
+which is already interruptible. `BlockingQueueBuffer` uses a fixed capacity, as the other buffers.
 
-No implementation exists for the components below; their design is recorded in `design.md` as it is completed.
+### 5.5 `counter.IdGenerator`, `counter.Quota` (D10, D11)
 
-| Component | Purpose | Status |
+- `IdGenerator.next()`: `AtomicInteger.getAndIncrement()`, first id 0. The same safe generator is
+  used in every scenario, so lost and duplicated items are attributable only to the buffer.
+- `Quota.tryAcquire()`: atomic check-and-decrement of the remaining items to produce. Producers
+  draw from one shared quota: the total is fixed, the distribution among producers is dynamic.
+
+### 5.6 `actor.Producer`, `actor.Consumer` (D11, D13, D14)
+
+Both extend `Thread`, named `producer-<id>` / `consumer-<id>`, and take a `SimulationListener`
+and a `delayMillis`.
+
+| | Producer | Consumer |
 |---|---|---|
-| `IdGenerator` | global counter for unique item ids; itself a shared resource (D1) | planned, design in progress |
-| `Producer` | thread creating items and putting them into a `Buffer` | planned, design in progress |
-| `Consumer` | thread taking items until the poison pill is received | planned, design in progress |
-| `SimulationResult` | counts of produced, consumed, distinct consumed | planned |
-| `Simulation` | runs a scenario with a timeout | planned |
-| Sequential scenario | scenario 1 | planned |
-| `App` / `Menu` | terminal UI, plain ANSI codes, no library | planned |
+| Loop | quota → id → `beforePut` → `put` → count → `onPut` → pause | `beforeTake` → `take` → (pill: exit) → record → `onTake` → pause |
+| Result | `getProduced()` | `getConsumed()` (read-only list) |
+| Interruption | in `put` or in the pause: thread ends, `wasInterrupted()` true | in `take` or in the pause: same |
 
-### Result metrics (D1)
+- The pause is `Thread.sleep(delayMillis)` outside the buffer, skipped when the delay is 0.
+- Results are private fields written only by the thread and read after `join()`, which
+  guarantees visibility.
+- The producer counts an item only after a successful `put`. The consumer does not record the
+  pill and does not put it back.
 
-- lost = produced − distinct consumed
-- duplicated = consumed − distinct consumed
+### 5.7 `event.SimulationListener` (D14)
 
-## 5. Blocking detection (D2)
+```java
+void beforePut(String thread);
+void onPut(String thread, Item item);
+void beforeTake(String thread);
+void onTake(String thread, Item item);
+SimulationListener NONE;  // ignores every event
+```
 
-A per-scenario timeout interrupts all threads when exceeded. It covers threads blocked
-indefinitely, such as a consumer waiting for an item lost in the unsynchronized scenario.
+- `before*` is notified before calling the buffer, `on*` after a successful operation; an
+  interrupted operation has only `before*`.
+- The poison pill generates no events: the terminator's puts are not notified and the take of the
+  pill has only `beforeTake`.
+- Methods are called concurrently by the simulation threads: implementations must be thread-safe
+  and short.
 
-The application always returns to the menu.
+### 5.8 `simulation.SimulationConfig` (D15)
 
-## 6. Tests
+Immutable: producers, consumers, items, capacity, timeout, delay. Values are validated in the
+constructor (`IllegalArgumentException` naming the parameter and the range); limits are public
+constants (`MIN_*`, `MAX_*`), reused by the interface.
 
-Run with `mvn test`. Current suite: 43 test executions (inherited tests run once per concrete subclass).
+### 5.9 `simulation.Simulation` (D12, D15)
+
+`new Simulation(buffer, config, listener).run()` executes one concurrent run on the calling
+thread. The class is not a thread; one instance runs once.
+
+1. Consumers are started, then producers. All threads are daemon.
+2. The calling thread waits for the producers, then a dedicated `terminator` thread puts one
+   poison pill per consumer, then the consumers are awaited.
+3. Every wait uses the time remaining before a single deadline (section 6).
+
+### 5.10 `simulation.SimulationResult`, `simulation.WorkerReport` (D15)
+
+`WorkerReport`: name, count, interrupted flag of one thread. `SimulationResult`: reports of
+producers and consumers, consumed items, timeout flag, names of threads still alive, elapsed
+time. It computes produced, consumed, distinct, lost, duplicated and the map of duplicated items
+with their number of occurrences. Lost items are only counted.
+
+### 5.11 `scenario` (D16)
+
+- `Scenario`: `getName()`, `getDescription()`, `run(SimulationConfig, SimulationListener)`.
+- `BufferScenario` (abstract, template method): `run` is `final`, creates a new buffer with
+  `createBuffer(config)` and delegates to `Simulation`. Subclasses: `UnsafeScenario`,
+  `MonitorScenario`, `LockScenario`, `BlockingQueueScenario`.
+- `SequentialScenario`: implements `Scenario` directly (section 3.1); notifies the same events and
+  applies the same pause.
+- `Scenarios.all()`: the five scenarios in menu order, in an unmodifiable list.
+
+### 5.12 `tui` (D17)
+
+| Class | Responsibility |
+|---|---|
+| `App` | `main`: connects the interface to `System.in` / `System.out` in UTF-8 |
+| `Tui` | screen loop, one method per screen; runs the scenario on a dedicated `runner` thread |
+| `Theme` | colours (24-bit ANSI), `WIDTH` 60, app name and tagline, parameter defaults |
+| `Box` | header, box with title in the top border, footer, wrapping, visible length |
+| `Parameters` | current parameter values, conversion to `SimulationConfig` |
+| `LiveView` | listener queueing events; derives thread states and the live view lines |
+| `ResultView` | lines of the result screen and the verdict |
+
+- Input and output go through an injected `Reader` and `Writer`, replaced in the tests.
+- `LiveView` listener methods only add events to a `ConcurrentLinkedQueue`. The interface thread
+  drains the queue, redraws, and waits for the runner with `join(100)`, which is both the wait and
+  the refresh rate. It is the only thread that writes to the terminal.
+- The result is read after the runner is no longer alive, which makes its fields visible.
+- Fixed width of 60 columns: Java does not expose the terminal width, and fixed output can be
+  verified in tests.
+
+## 6. Termination and timeout
+
+(D2, D12, D15)
+
+- Normal end: producers finish the quota, the terminator puts one pill per consumer, every
+  consumer ends on its pill.
+- Timeout: a single deadline covers the whole run. When it expires, every live thread is
+  interrupted and awaited for a fixed grace period (1 s); threads still alive are reported in the
+  result. A thread that ignores interruption stays alive until the application exits, which daemon
+  threads do not prevent.
+- The calling thread never waits without a limit, so the application always returns to the menu.
+
+## 7. Tests
+
+Run with `mvn test`. Current suite: 178 test executions (inherited and parameterized tests count
+once per execution).
 
 | Class | Scope |
 |---|---|
-| `BufferTest` (abstract) | contract common to all buffers: FIFO order, capacity, `null`, wrap-around, waiting when full or empty, interruption. One subclass per buffer defines only how to create it. |
-| `SynchronizedBufferTest` (abstract, extends `BufferTest`) | concurrency invariant for the correct buffers: 4 producers, 3 consumers, each item consumed exactly once. |
-| `ItemTest` | `Item` equality and poison pill. |
-| `SmokeTest` | build and test infrastructure check. |
+| `ItemTest` | equality and poison pill |
+| `BufferTest` (abstract) | contract common to all buffers: FIFO order, capacity, `null`, wrap-around, waiting when full or empty, interruption |
+| `SynchronizedBufferTest` (abstract) | correct buffers: 4 producers, 3 consumers, each item consumed exactly once |
+| `UnsafeBufferTest`, `UnsafeBufferRaceTest` | contract without and with the internal pause |
+| `IdGeneratorTest`, `QuotaTest` | unique ids and exact quota under concurrency |
+| `ProducerTest`, `ConsumerTest` | loops, events, pause, interruption while blocked or pausing |
+| `SimulationConfigTest`, `SimulationResultTest` | validation and limits; metrics |
+| `SimulationTest` | correct buffers, timeout, thread ignoring interruption, events, delay |
+| `BufferScenarioTest`, `SequentialScenarioTest`, `ScenariosTest` | buffers created, results, events, catalog |
+| `BoxTest`, `ParametersTest`, `LiveViewTest`, `ResultViewTest` | lines and widths of every view, states, truncation, verdict |
+| `TuiTest` | complete sessions with scripted input and fake scenarios |
+| `SmokeTest` | build and test infrastructure check |
 
-`UnsafeBuffer` has no race test: losses vary widely between runs (about 400 to 3500 of 10,000 items,
-even with one producer and one consumer). The simulation will verify only that no exception is thrown.
+Shared test helpers: `event.RecordingListener` (records events as strings) and `tui.Ansi`
+(removes ANSI sequences, checks line width).
 
 Principles (D3):
 
 - Every concurrent test has a timeout: a block fails the test instead of hanging the build.
 - Tests assert invariants valid under any interleaving, never a specific thread order.
 - "Blocks when full or empty" is verified by checking that the thread is still alive after a wait.
+- Timing tests assert only a lower bound (for example, three pauses of 50 ms take at least 150 ms).
+- `UnsafeBuffer` has no race test: losses vary widely between runs. The scenario test verifies only
+  that the run returns.
 
-## 7. Maintenance of this document
+## 8. Maintenance of this document
 
-When a component is implemented: move it from section 4 to section 3 with a new subsection,
-update the status in the scenario table, and update the test count in section 6.
+When a component changes: update its subsection in section 5, the tables in sections 2 and 3 if
+the behaviour visible to the user changes, and the test count in section 7 and in the README.

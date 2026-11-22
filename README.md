@@ -9,51 +9,62 @@ One or more producers generate items and place them in a bounded shared buffer; 
 consumers remove and process them. The problem is the coordination of access to the buffer:
 no overwrite of unread items, no read from an empty buffer, no lost or duplicated items.
 
-The target application is a terminal program in which a scenario is selected from a menu, executed,
-and its outcome reported numerically (produced, consumed, lost, duplicated), including for
-incorrect synchronization strategies.
+The application is a terminal program: a scenario is selected from a menu, run with editable
+parameters and its outcome reported numerically (produced, consumed, lost, duplicated), including
+for an incorrect synchronization strategy. With a positive delay, the run is shown live: buffer
+fill level, state of every thread and the latest operations.
 
-## Project status
+## Run
 
-| Component | Status |
-|---|---|
-| `Item` (with poison pill) | implemented, tested |
-| `Buffer` interface | implemented, tested |
-| `UnsafeBuffer`, `MonitorBuffer`, `LockBuffer`, `BlockingQueueBuffer` | implemented, tested |
-| `IdGenerator`, `Producer`, `Consumer` | planned (design in progress) |
-| Simulation, scenarios, terminal UI | planned |
+Requirements: Java 21, Maven, a terminal with UTF-8 and 24-bit colour. Runtime dependencies: none.
 
-The terminal application does not exist yet: `mvn compile exec:java` is configured for the
-future entry point `producerconsumer.tui.App` and cannot be run at this stage.
+```bash
+mvn -q compile exec:java
+```
+
+Every command is a line confirmed with Enter; the footer of each screen lists the available keys.
+During a live run the program can be stopped only with Ctrl+C.
 
 ## Scenarios
 
 | # | Scenario | Mechanism | Expected outcome |
 |---|---|---|---|
-| 1 | Sequential | single thread | produced == consumed |
+| 1 | Sequential | single thread, fill then drain | every item consumed exactly once |
 | 2 | Unsynchronized | `UnsafeBuffer`, no locking | items lost and duplicated, no exceptions |
-| 3 | Monitor | `synchronized`, `wait`, `notifyAll` | produced == consumed |
-| 4 | Lock and Condition | `ReentrantLock`, two `Condition`s | produced == consumed |
-| 5 | Blocking queue | `ArrayBlockingQueue` | produced == consumed |
+| 3 | Monitor | `synchronized`, `wait`, `notifyAll` | every item consumed exactly once |
+| 4 | Lock and Condition | `ReentrantLock`, two `Condition`s | every item consumed exactly once |
+| 5 | Blocking queue | `ArrayBlockingQueue` | every item consumed exactly once |
 
-The buffers used by scenarios 2 to 5 are implemented; the scenarios themselves are planned.
+## Parameters
+
+Shared by all scenarios.
+
+| Parameter | Default | Range |
+|---|---|---|
+| Producers | 3 | 1 to 50 |
+| Consumers | 2 | 1 to 50 |
+| Items | 40 | 0 to 1,000,000 |
+| Buffer capacity | 5 | 1 to 1,000 |
+| Timeout (ms) | 30,000 | 100 to 60,000 |
+| Delay (ms) | 200 | 0 to 2,000 |
+
+Delay 0 runs at full speed and shows only the result (for measuring); a positive delay slows
+every thread and shows the live view (for observing).
 
 ## Build and test
-
-Requirements: Java 21, Maven. Runtime dependencies: none (JUnit 5 for tests only).
 
 ```bash
 mvn test
 ```
 
-Concurrent tests carry a timeout and assert only interleaving-independent invariants, so the
-suite is deterministic in outcome.
+178 test executions. Concurrent tests carry a timeout and assert only interleaving-independent
+invariants, so the suite is deterministic in outcome.
 
 ## Documentation
 
 | Document | Content |
 |---|---|
-| [docs/GUIDE.md](docs/GUIDE.md) | Scenarios, classes and test suite (English) |
+| [docs/GUIDE.md](docs/GUIDE.md) | Usage, scenarios, classes and test suite (English) |
 | [docs/design.md](docs/design.md) | Requirements and design decision log D1..Dn (Italian) |
 
 ## Repository layout
@@ -62,9 +73,14 @@ suite is deterministic in outcome.
 src/main/java/producerconsumer/
   model/Item.java
   buffer/{Buffer, UnsafeBuffer, MonitorBuffer, LockBuffer, BlockingQueueBuffer}.java
+  counter/{IdGenerator, Quota}.java
+  actor/{Producer, Consumer}.java
+  event/SimulationListener.java
+  simulation/{SimulationConfig, Simulation, SimulationResult, WorkerReport}.java
+  scenario/{Scenario, BufferScenario, *Scenario, Scenarios}.java
+  tui/{App, Tui, Theme, Box, Parameters, LiveView, ResultView}.java
 src/test/java/producerconsumer/
-  model/ItemTest.java
-  buffer/{BufferTest, SynchronizedBufferTest, *BufferTest}.java
+  tests in the same packages, plus shared helpers (RecordingListener, Ansi)
 docs/
 ```
 

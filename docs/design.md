@@ -10,23 +10,23 @@ si aggiunge in coda alla propria sezione, con il formato **Decisione / Motivazio
 
 | ID | Titolo | Area | Stato |
 |---|---|---|---|
-| D1 | Identificazione degli elementi: contatore globale | Analisi | registrata |
-| D2 | Rilevamento dei blocchi: timeout | Analisi | registrata |
-| D3 | Test affidabili: invarianti e timeout | Analisi | registrata |
+| D1 | Identificazione degli elementi: contatore globale | Analisi | implementata |
+| D2 | Rilevamento dei blocchi: timeout | Analisi | implementata |
+| D3 | Test affidabili: invarianti e timeout | Analisi | implementata |
 | D4 | `Item`: classe immutabile con poison pill come costante | Classi | implementata |
 | D5 | `Buffer`: interfaccia minima, specifica per `Item`, interrompibile | Classi | implementata |
 | D6 | Regole comuni a tutti i buffer | Classi | implementata |
 | D7 | `UnsafeBuffer`: array circolare, contatore non atomico, attesa in polling | Classi | implementata |
 | D8 | `MonitorBuffer` e `LockBuffer`: stessa logica, primitive diverse | Classi | implementata |
 | D9 | `BlockingQueueBuffer`: delega a `ArrayBlockingQueue` | Classi | implementata |
-| D10 | `IdGenerator`: `AtomicInteger`, id da 0 | Classi | registrata |
-| D11 | `Producer`: thread con quota condivisa | Classi | registrata |
-| D12 | Terminazione: poison pill inserite dal coordinatore | Classi | registrata |
-| D13 | `Consumer`: thread con registro locale degli item consumati | Classi | registrata |
-| D14 | Visualizzazione: osservazione dal vivo e rallentamento | Simulazione | in definizione |
-| D15 | Simulazione: `Scenario`, `Simulation`, configurazione e risultato | Simulazione | registrata |
+| D10 | `IdGenerator`: `AtomicInteger`, id da 0 | Classi | implementata |
+| D11 | `Producer`: thread con quota condivisa | Classi | implementata |
+| D12 | Terminazione: poison pill inserite dal coordinatore | Classi | implementata |
+| D13 | `Consumer`: thread con registro locale degli item consumati | Classi | implementata |
+| D14 | Visualizzazione: osservazione dal vivo e rallentamento | Simulazione | implementata |
+| D15 | Simulazione: `Scenario`, `Simulation`, configurazione e risultato | Simulazione | implementata |
 | D16 | Scenari: interfaccia `Scenario` e implementazioni | Simulazione | implementata |
-| D17 | TUI | TUI | in definizione |
+| D17 | TUI: interazione, schermate e stile | TUI | implementata |
 
 ## Requisiti
 
