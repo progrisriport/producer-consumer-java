@@ -44,7 +44,8 @@ class SimulationTest {
     @ValueSource(strings = {"monitor", "lock", "blocking-queue"})
     void safeBufferConsumesEveryItemOnce(String name) throws InterruptedException {
         SimulationConfig config = new SimulationConfig(4, 3, 10_000, 5, 5_000, 0);
-        SimulationResult r = new Simulation(createBuffer(name, config.getCapacity()), config, SimulationListener.NONE).run();
+        Buffer buffer = createBuffer(name, config.getCapacity());
+        SimulationResult r = new Simulation(buffer, config, SimulationListener.NONE).run();
 
         assertFalse(r.isTimedOut());
         assertEquals(10_000, r.getProduced());
@@ -61,7 +62,8 @@ class SimulationTest {
     @ValueSource(strings = {"monitor", "lock", "blocking-queue"})
     void worksWithMoreConsumersThanProducers(String name) throws InterruptedException {
         SimulationConfig config = new SimulationConfig(1, 5, 1_000, 2, 5_000, 0);
-        SimulationResult r = new Simulation(createBuffer(name, config.getCapacity()), config, SimulationListener.NONE).run();
+        Buffer buffer = createBuffer(name, config.getCapacity());
+        SimulationResult r = new Simulation(buffer, config, SimulationListener.NONE).run();
 
         assertFalse(r.isTimedOut());
         assertEquals(1_000, r.getConsumed());
