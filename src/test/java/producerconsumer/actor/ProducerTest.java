@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Timeout;
 import producerconsumer.buffer.Buffer;
 import producerconsumer.counter.IdGenerator;
 import producerconsumer.counter.Quota;
+import producerconsumer.event.RecordingListener;
+import producerconsumer.event.SimulationListener;
 import producerconsumer.model.Item;
 
 /**
@@ -84,7 +86,8 @@ class ProducerTest {
 
     @Test
     void isAThreadNamedAfterItsId() {
-        Producer producer = new Producer(2, new RecordingBuffer(), new IdGenerator(), new Quota(0));
+        Producer producer = new Producer(2, new RecordingBuffer(), new IdGenerator(), new Quota(0),
+                SimulationListener.NONE, 0);
         assertInstanceOf(Thread.class, producer);
         assertEquals("producer-2", producer.getName());
     }
@@ -92,7 +95,7 @@ class ProducerTest {
     @Test
     void putsOneItemPerPermit() throws InterruptedException {
         RecordingBuffer buffer = new RecordingBuffer();
-        Producer producer = new Producer(3, buffer, new IdGenerator(), new Quota(5));
+        Producer producer = new Producer(3, buffer, new IdGenerator(), new Quota(5), SimulationListener.NONE, 0);
 
         producer.start();
         producer.join();
@@ -107,7 +110,7 @@ class ProducerTest {
     @Test
     void doesNotPutPoisonPill() throws InterruptedException {
         RecordingBuffer buffer = new RecordingBuffer();
-        Producer producer = new Producer(1, buffer, new IdGenerator(), new Quota(10));
+        Producer producer = new Producer(1, buffer, new IdGenerator(), new Quota(10), SimulationListener.NONE, 0);
 
         producer.start();
         producer.join();
@@ -120,7 +123,7 @@ class ProducerTest {
     @Test
     void terminatesImmediatelyWithZeroQuota() throws InterruptedException {
         RecordingBuffer buffer = new RecordingBuffer();
-        Producer producer = new Producer(1, buffer, new IdGenerator(), new Quota(0));
+        Producer producer = new Producer(1, buffer, new IdGenerator(), new Quota(0), SimulationListener.NONE, 0);
 
         producer.start();
         producer.join();
@@ -144,7 +147,7 @@ class ProducerTest {
 
         List<Producer> producers = new ArrayList<>();
         for (int id = 1; id <= 3; id++) {
-            producers.add(new Producer(id, buffer, generator, quota));
+            producers.add(new Producer(id, buffer, generator, quota, SimulationListener.NONE, 0));
         }
         for (Producer producer : producers) {
             producer.start();
@@ -183,7 +186,7 @@ class ProducerTest {
     @Test
     void stopsAndRecordsInterruptionWhenBlockedOnPut() throws InterruptedException {
         InterruptibleBlockingBuffer buffer = new InterruptibleBlockingBuffer(2);
-        Producer producer = new Producer(1, buffer, new IdGenerator(), new Quota(10));
+        Producer producer = new Producer(1, buffer, new IdGenerator(), new Quota(10), SimulationListener.NONE, 0);
 
         producer.start();
         assertTrue(buffer.blocked.await(2, TimeUnit.SECONDS), "il producer deve arrivare al terzo put");
@@ -194,5 +197,83 @@ class ProducerTest {
         assertTrue(producer.wasInterrupted());
         assertEquals(2, producer.getProduced(), "il put interrotto non conta come prodotto");
         assertEquals(2, buffer.items.size());
+    }
+
+    @Test
+    void notifiesBeforeAndAfterEachPut() throws InterruptedException {
+        RecordingListener listener = new RecordingListener();
+        Producer producer = new Producer(1, new RecordingBuffer(), new IdGenerator(), new Quota(2), listener, 0);
+
+        producer.start();
+        producer.join();
+
+        List<String> expected = List.of(
+                "beforePut producer-1", "onPut producer-1 0",
+                "beforePut producer-1", "onPut producer-1 1");
+        assertEquals(expected, listener.events());
+    }
+
+    /** Un put interrotto ha solo l'evento before. */
+    @Test
+    void interruptedPutHasNoOnPutEvent() throws InterruptedException {
+        InterruptibleBlockingBuffer buffer = new InterruptibleBlockingBuffer(1);
+        RecordingListener listener = new RecordingListener();
+        Producer producer = new Producer(1, buffer, new IdGenerator(), new Quota(10), listener, 0);
+
+        producer.start();
+        assertTrue(buffer.blocked.await(2, TimeUnit.SECONDS), "il producer deve arrivare al secondo put");
+        producer.interrupt();
+        producer.join(2000);
+
+        assertEquals(2, listener.count("beforePut "));
+        assertEquals(1, listener.count("onPut "));
+    }
+
+    @Test
+    void pausesAfterEachPut() throws InterruptedException {
+        Producer producer = new Producer(1, new RecordingBuffer(), new IdGenerator(), new Quota(3),
+                SimulationListener.NONE, 50);
+
+        long start = System.nanoTime();
+        producer.start();
+        producer.join();
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+
+        assertEquals(3, producer.getProduced());
+        assertTrue(elapsedMillis >= 150, "tre pause da 50 ms: " + elapsedMillis + " ms");
+    }
+
+    /** L'interruzione durante la pausa termina il thread; il put precedente resta contato. */
+    @Test
+    void stopsWhenInterruptedDuringPause() throws InterruptedException {
+        final CountDownLatch firstPut = new CountDownLatch(1);
+        SimulationListener listener = new SimulationListener() {
+            @Override
+            public void beforePut(String thread) {
+            }
+
+            @Override
+            public void onPut(String thread, Item item) {
+                firstPut.countDown();
+            }
+
+            @Override
+            public void beforeTake(String thread) {
+            }
+
+            @Override
+            public void onTake(String thread, Item item) {
+            }
+        };
+        Producer producer = new Producer(1, new RecordingBuffer(), new IdGenerator(), new Quota(5), listener, 10_000);
+
+        producer.start();
+        assertTrue(firstPut.await(2, TimeUnit.SECONDS), "il producer deve completare il primo put");
+        producer.interrupt();
+        producer.join(2000);
+
+        assertFalse(producer.isAlive(), "il producer interrotto deve terminare");
+        assertTrue(producer.wasInterrupted());
+        assertEquals(1, producer.getProduced());
     }
 }

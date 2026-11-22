@@ -9,6 +9,7 @@ import producerconsumer.actor.Producer;
 import producerconsumer.buffer.Buffer;
 import producerconsumer.counter.IdGenerator;
 import producerconsumer.counter.Quota;
+import producerconsumer.event.SimulationListener;
 import producerconsumer.model.Item;
 
 /**
@@ -31,14 +32,18 @@ public final class Simulation {
 
     private final Buffer buffer;
     private final SimulationConfig config;
+    private final SimulationListener listener;
 
     /**
-     * @param buffer buffer condiviso; la capacità di {@code config} non viene applicata qui
-     * @param config parametri della simulazione
+     * @param buffer   buffer condiviso; la capacità di {@code config} non viene applicata qui
+     * @param config   parametri della simulazione
+     * @param listener destinatario degli eventi di producer e consumer; le pillole del
+     *                 terminator non sono notificate
      */
-    public Simulation(Buffer buffer, SimulationConfig config) {
+    public Simulation(Buffer buffer, SimulationConfig config, SimulationListener listener) {
         this.buffer = buffer;
         this.config = config;
+        this.listener = listener;
     }
 
     /**
@@ -56,11 +61,11 @@ public final class Simulation {
 
         List<Producer> producers = new ArrayList<>();
         for (int id = 1; id <= config.getProducers(); id++) {
-            producers.add(new Producer(id, buffer, generator, quota));
+            producers.add(new Producer(id, buffer, generator, quota, listener, config.getDelayMillis()));
         }
         List<Consumer> consumers = new ArrayList<>();
         for (int id = 1; id <= config.getConsumers(); id++) {
-            consumers.add(new Consumer(id, buffer));
+            consumers.add(new Consumer(id, buffer, listener, config.getDelayMillis()));
         }
         Thread terminator = new Thread(new Runnable() {
             @Override

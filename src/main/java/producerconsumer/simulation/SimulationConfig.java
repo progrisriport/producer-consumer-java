@@ -16,12 +16,15 @@ public final class SimulationConfig {
     public static final int MAX_CAPACITY = 1_000;
     public static final long MIN_TIMEOUT_MILLIS = 100;
     public static final long MAX_TIMEOUT_MILLIS = 60_000;
+    public static final long MIN_DELAY_MILLIS = 0;
+    public static final long MAX_DELAY_MILLIS = 2_000;
 
     private final int producers;
     private final int consumers;
     private final int items;
     private final int capacity;
     private final long timeoutMillis;
+    private final long delayMillis;
 
     /**
      * @param producers     numero di producer
@@ -29,14 +32,18 @@ public final class SimulationConfig {
      * @param items         numero totale di item da produrre
      * @param capacity      capacità del buffer
      * @param timeoutMillis durata massima della simulazione in millisecondi
+     * @param delayMillis   pausa di producer e consumer dopo ogni operazione riuscita,
+     *                      in millisecondi; 0 = nessuna pausa
      * @throws IllegalArgumentException se un valore è fuori dai limiti
      */
-    public SimulationConfig(int producers, int consumers, int items, int capacity, long timeoutMillis) {
+    public SimulationConfig(int producers, int consumers, int items, int capacity, long timeoutMillis,
+            long delayMillis) {
         this.producers = requireInRange("producers", producers, MIN_PRODUCERS, MAX_PRODUCERS);
         this.consumers = requireInRange("consumers", consumers, MIN_CONSUMERS, MAX_CONSUMERS);
         this.items = requireInRange("items", items, MIN_ITEMS, MAX_ITEMS);
         this.capacity = requireInRange("capacity", capacity, MIN_CAPACITY, MAX_CAPACITY);
         this.timeoutMillis = requireInRange("timeoutMillis", timeoutMillis, MIN_TIMEOUT_MILLIS, MAX_TIMEOUT_MILLIS);
+        this.delayMillis = requireInRange("delayMillis", delayMillis, MIN_DELAY_MILLIS, MAX_DELAY_MILLIS);
     }
 
     /**
@@ -88,9 +95,14 @@ public final class SimulationConfig {
         return timeoutMillis;
     }
 
+    public long getDelayMillis() {
+        return delayMillis;
+    }
+
     @Override
     public String toString() {
         return "SimulationConfig[producers=" + producers + ", consumers=" + consumers
-                + ", items=" + items + ", capacity=" + capacity + ", timeoutMillis=" + timeoutMillis + "]";
+                + ", items=" + items + ", capacity=" + capacity + ", timeoutMillis=" + timeoutMillis
+                + ", delayMillis=" + delayMillis + "]";
     }
 }

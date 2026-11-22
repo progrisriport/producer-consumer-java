@@ -14,6 +14,8 @@ import producerconsumer.buffer.Buffer;
 import producerconsumer.buffer.LockBuffer;
 import producerconsumer.buffer.MonitorBuffer;
 import producerconsumer.buffer.UnsafeBuffer;
+import producerconsumer.event.RecordingListener;
+import producerconsumer.event.SimulationListener;
 import producerconsumer.simulation.SimulationConfig;
 import producerconsumer.simulation.SimulationResult;
 
@@ -21,7 +23,7 @@ import producerconsumer.simulation.SimulationResult;
 @Timeout(value = 15, unit = TimeUnit.SECONDS)
 class BufferScenarioTest {
 
-    private static final SimulationConfig CONFIG = new SimulationConfig(3, 2, 2_000, 4, 5_000);
+    private static final SimulationConfig CONFIG = new SimulationConfig(3, 2, 2_000, 4, 5_000, 0);
 
     private static BufferScenario create(String name) {
         switch (name) {
@@ -60,7 +62,7 @@ class BufferScenarioTest {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"monitor", "lock", "blocking-queue"})
     void safeScenarioConsumesEveryItemOnce(String name) throws InterruptedException {
-        SimulationResult r = create(name).run(CONFIG);
+        SimulationResult r = create(name).run(CONFIG, SimulationListener.NONE);
 
         assertFalse(r.isTimedOut());
         assertEquals(CONFIG.getItems(), r.getProduced());
@@ -76,8 +78,8 @@ class BufferScenarioTest {
     @ValueSource(strings = {"monitor", "lock", "blocking-queue"})
     void canRunTwice(String name) throws InterruptedException {
         BufferScenario scenario = create(name);
-        scenario.run(CONFIG);
-        SimulationResult second = scenario.run(CONFIG);
+        scenario.run(CONFIG, SimulationListener.NONE);
+        SimulationResult second = scenario.run(CONFIG, SimulationListener.NONE);
 
         assertEquals(CONFIG.getItems(), second.getConsumed());
         assertEquals(0, second.getLost());
@@ -86,9 +88,20 @@ class BufferScenarioTest {
     /** Il buffer non sincronizzato può perdere anche le pillole: si verifica solo che il run termini. */
     @Test
     void unsafeScenarioAlwaysReturns() throws InterruptedException {
-        SimulationConfig config = new SimulationConfig(2, 2, 2_000, 4, 1_000);
-        SimulationResult r = new UnsafeScenario().run(config);
+        SimulationConfig config = new SimulationConfig(2, 2, 2_000, 4, 1_000, 0);
+        SimulationResult r = new UnsafeScenario().run(config, SimulationListener.NONE);
 
         assertTrue(r.getNotTerminated().isEmpty());
+    }
+
+    /** Il listener passato allo scenario arriva a producer e consumer. */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"monitor", "lock", "blocking-queue"})
+    void passesListenerToTheSimulation(String name) throws InterruptedException {
+        RecordingListener listener = new RecordingListener();
+        create(name).run(CONFIG, listener);
+
+        assertEquals(CONFIG.getItems(), listener.count("onPut "));
+        assertEquals(CONFIG.getItems(), listener.count("onTake "));
     }
 }

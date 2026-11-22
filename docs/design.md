@@ -302,7 +302,8 @@ degli id di tutte le liste.
 **Decisione:**
 - Interfaccia `SimulationListener` nel nucleo, con `onPut(String thread, Item item)` e
   `onTake(String thread, Item item)`: producer e consumer notificano ogni operazione riuscita.
-  In assenza di osservatori si usa un listener che non fa nulla.
+  In assenza di osservatori si usa un listener che non fa nulla. Package
+  `producerconsumer.event`, che dipende solo da `model`.
 - La TUI implementa il listener inserendo gli eventi in una coda thread-safe
   (`ConcurrentLinkedQueue`), senza stampare. Un solo thread della TUI svuota la coda a intervalli
   regolari, aggiorna la vista e ridisegna.
@@ -334,6 +335,8 @@ degli id di tutte le liste.
   contemporaneamente.
 - Con la coda il nucleo resta senza I/O e un solo thread scrive sullo schermo. I thread della
   simulazione producono eventi, la TUI li consuma.
+- Package `event` separato: `actor`, `simulation`, `scenario` e la TUI usano il listener senza
+  creare un ciclo tra `actor` e `simulation`.
 - Pausa nei thread e fuori dal buffer: i buffer non cambiano e le operazioni restano brevi, solo
   più rare. Una pausa dentro il buffer, con il lock acquisito, renderebbe seriali i buffer
   sicuri; una pausa nel listener sarebbe un effetto nascosto della TUI. `sleep` è interrompibile

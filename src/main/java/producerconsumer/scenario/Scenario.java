@@ -1,5 +1,6 @@
 package producerconsumer.scenario;
 
+import producerconsumer.event.SimulationListener;
 import producerconsumer.simulation.SimulationConfig;
 import producerconsumer.simulation.SimulationResult;
 
@@ -18,9 +19,10 @@ public interface Scenario {
     /**
      * Esegue un run completo. Ogni chiamata usa un buffer nuovo.
      *
-     * @param config parametri della simulazione
+     * @param config   parametri della simulazione
+     * @param listener destinatario degli eventi; {@link SimulationListener#NONE} se non serve
      * @return esito del run
      * @throws InterruptedException se il thread chiamante viene interrotto durante un'attesa
      */
-    SimulationResult run(SimulationConfig config) throws InterruptedException;
+    SimulationResult run(SimulationConfig config, SimulationListener listener) throws InterruptedException;
 }

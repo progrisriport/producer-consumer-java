@@ -10,6 +10,11 @@ import producerconsumer.model.Item;
  * diverge dal contenuto reale. Effetti: item sovrascritti prima della lettura (persi)
  * o letti più volte (duplicati).
  *
+ * count, head e tail sono aggiornati in tre passi espliciti: lettura in una variabile locale,
+ * pausa di raceMillis, scrittura. La pausa allarga la finestra in cui un altro thread legge
+ * il valore vecchio; con raceMillis = 0 non c'è pausa e l'aggiornamento equivale a count++.
+ * Un'interruzione durante la pausa lascia l'aggiornamento incompleto.
+ *
  * Attesa su buffer pieno/vuoto in polling: wait() richiede il possesso del monitor.
  * Struttura ad array e non LinkedList: una lista modificata concorrentemente può
  * corrompere i nodi e lanciare eccezioni; l'array resta sempre in uno stato valido.
@@ -22,11 +27,22 @@ public class UnsafeBuffer implements Buffer {
     // volatile: garantisce la visibilità tra thread (il polling legge sempre l'ultimo valore scritto),
     // non l'atomicità di count++ e count--.
     private volatile int count;
+    private final long raceMillis;
 
-    public UnsafeBuffer(int capacity) {
+    /**
+     * @param capacity   numero massimo di item
+     * @param raceMillis pausa tra lettura e scrittura di count, head e tail, in millisecondi;
+     *                   0 = nessuna pausa
+     * @throws IllegalArgumentException se capacity <= 0 o raceMillis < 0
+     */
+    public UnsafeBuffer(int capacity, long raceMillis) {
         if (capacity <= 0) {
             throw new IllegalArgumentException("capacity must be > 0");
         }
+        if (raceMillis < 0) {
+            throw new IllegalArgumentException("raceMillis must be >= 0");
+        }
+        this.raceMillis = raceMillis;
         this.items = new Item[capacity];
         this.head = 0;
         this.tail = 0;
@@ -42,8 +58,12 @@ public class UnsafeBuffer implements Buffer {
             pause();
         }
         items[tail] = item;
-        tail = (tail + 1) % items.length;
-        count++;
+        int oldTail = tail;
+        racePause();
+        tail = (oldTail + 1) % items.length;
+        int oldCount = count;
+        racePause();
+        count = oldCount + 1;
     }
 
     @Override
@@ -56,8 +76,12 @@ public class UnsafeBuffer implements Buffer {
             // null solo se la cella non è mai stata scritta (count non coerente): nuovo tentativo
             if (item != null) {
                 // la cella non viene svuotata: con count più alto del reale viene riletta (duplicato)
-                head = (head + 1) % items.length;
-                count--;
+                int oldHead = head;
+                racePause();
+                head = (oldHead + 1) % items.length;
+                int oldCount = count;
+                racePause();
+                count = oldCount - 1;
                 return item;
             }
             pause();
@@ -67,6 +91,18 @@ public class UnsafeBuffer implements Buffer {
     @Override
     public int capacity() {
         return items.length;
+    }
+
+    /**
+     * Pausa tra lettura e scrittura di un campo condiviso. Con raceMillis = 0 non sospende
+     * il thread: Thread.sleep(0) potrebbe comunque cedere il processore.
+     *
+     * @throws InterruptedException se il thread viene interrotto durante la pausa
+     */
+    private void racePause() throws InterruptedException {
+        if (raceMillis > 0) {
+            Thread.sleep(raceMillis);
+        }
     }
 
     /**

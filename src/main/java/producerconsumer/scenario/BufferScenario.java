@@ -1,6 +1,7 @@
 package producerconsumer.scenario;
 
 import producerconsumer.buffer.Buffer;
+import producerconsumer.event.SimulationListener;
 import producerconsumer.simulation.Simulation;
 import producerconsumer.simulation.SimulationConfig;
 import producerconsumer.simulation.SimulationResult;
@@ -43,9 +44,10 @@ public abstract class BufferScenario implements Scenario {
     }
 
     @Override
-    public final SimulationResult run(SimulationConfig config) throws InterruptedException {
+    public final SimulationResult run(SimulationConfig config, SimulationListener listener)
+            throws InterruptedException {
         Buffer buffer = createBuffer(config);
-        Simulation simulation = new Simulation(buffer, config);
+        Simulation simulation = new Simulation(buffer, config, listener);
         return simulation.run();
     }
 }

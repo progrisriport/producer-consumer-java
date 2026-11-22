@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 import producerconsumer.buffer.UnsafeBuffer;
 import producerconsumer.counter.IdGenerator;
 import producerconsumer.counter.Quota;
+import producerconsumer.event.SimulationListener;
 import producerconsumer.model.Item;
 import producerconsumer.simulation.SimulationConfig;
 import producerconsumer.simulation.SimulationResult;
@@ -21,6 +22,10 @@ import producerconsumer.simulation.WorkerReport;
  *
  * Usa {@link UnsafeBuffer}: senza accessi concorrenti il buffer non perde né duplica item.
  * Il numero di producer e consumer della configurazione non viene usato.
+ *
+ * Gli eventi sono notificati a nome di {@link #PRODUCER_NAME} e {@link #CONSUMER_NAME}; dopo
+ * ogni operazione il thread si sospende per il ritardo della configurazione, come nei
+ * producer e consumer concorrenti. Il timeout della configurazione non viene applicato.
  */
 public final class SequentialScenario implements Scenario {
 
@@ -39,10 +44,12 @@ public final class SequentialScenario implements Scenario {
     }
 
     @Override
-    public SimulationResult run(SimulationConfig config) throws InterruptedException {
+    public SimulationResult run(SimulationConfig config, SimulationListener listener)
+            throws InterruptedException {
         long start = System.nanoTime();
+        long delayMillis = config.getDelayMillis();
 
-        UnsafeBuffer buffer = new UnsafeBuffer(config.getCapacity());
+        UnsafeBuffer buffer = new UnsafeBuffer(config.getCapacity(), 0);
         IdGenerator generator = new IdGenerator();
         Quota quota = new Quota(config.getItems());
         List<Item> consumed = new ArrayList<>();
@@ -53,15 +60,23 @@ public final class SequentialScenario implements Scenario {
             int inBuffer = 0;
             while (!exhausted && inBuffer < buffer.capacity()) {
                 if (quota.tryAcquire()) {
-                    buffer.put(new Item(generator.next(), PRODUCER_ID));
+                    Item item = new Item(generator.next(), PRODUCER_ID);
+                    listener.beforePut(PRODUCER_NAME);
+                    buffer.put(item);
                     produced++;
                     inBuffer++;
+                    listener.onPut(PRODUCER_NAME, item);
+                    pause(delayMillis);
                 } else {
                     exhausted = true;
                 }
             }
             for (int i = 0; i < inBuffer; i++) {
-                consumed.add(buffer.take());
+                listener.beforeTake(CONSUMER_NAME);
+                Item item = buffer.take();
+                consumed.add(item);
+                listener.onTake(CONSUMER_NAME, item);
+                pause(delayMillis);
             }
         }
 
@@ -69,5 +84,15 @@ public final class SequentialScenario implements Scenario {
         List<WorkerReport> producers = List.of(new WorkerReport(PRODUCER_NAME, produced, false));
         List<WorkerReport> consumers = List.of(new WorkerReport(CONSUMER_NAME, consumed.size(), false));
         return new SimulationResult(producers, consumers, consumed, false, List.of(), elapsedMillis);
+    }
+
+    /**
+     * @param delayMillis durata della pausa in millisecondi; 0 = nessuna pausa
+     * @throws InterruptedException se il thread viene interrotto durante la pausa
+     */
+    private static void pause(long delayMillis) throws InterruptedException {
+        if (delayMillis > 0) {
+            Thread.sleep(delayMillis);
+        }
     }
 }

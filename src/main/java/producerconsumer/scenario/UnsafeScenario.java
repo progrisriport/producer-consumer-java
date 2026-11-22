@@ -14,6 +14,6 @@ public final class UnsafeScenario extends BufferScenario {
 
     @Override
     protected Buffer createBuffer(SimulationConfig config) {
-        return new UnsafeBuffer(config.getCapacity());
+        return new UnsafeBuffer(config.getCapacity(), config.getDelayMillis());
     }
 }
