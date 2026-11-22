@@ -492,6 +492,10 @@ un nuovo buffer e una nuova `Simulation`.
   `Box` (header, box con titolo, footer), `Parameters` (valori correnti, conversione in
   `SimulationConfig`), `LiveView` (listener con coda, stato dei thread, righe della vista dal
   vivo), `ResultView` (righe della schermata del risultato).
+- Colori in truecolor a 24 bit (`ESC[38;2;r;g;bm`), con i valori esatti della palette; solo
+  colore del testo, nessuno sfondo. Le sequenze sono costanti di `Theme`.
+- Header: nome `producer-consumer` in grassetto e colore di accento, tagline
+  "Watch threads share a buffer" in testo secondario; entrambi costanti di `Theme`.
 
 **Motivazione:**
 - Java senza librerie legge l'input per righe. La lettura tasto per tasto richiede il raw mode
@@ -526,3 +530,9 @@ un nuovo buffer e una nuova `Simulation`.
   in righe di testo (`Box`, `LiveView`, `ResultView`) è separata dall'I/O e verificabile senza
   terminale. Una classe per schermata aumenterebbe le classi e richiederebbe di passare lo stato
   condiviso tra le schermate.
+- Truecolor: riproduce esattamente la palette del design system ed è supportato dai terminali
+  correnti (iTerm2, Windows Terminal, terminali integrati di VS Code e IntelliJ, Terminal.app
+  recente). Senza sfondi, un terminale che non lo supporta resta leggibile. Le sequenze sono in
+  un solo punto: un passaggio a 256 colori cambia solo le costanti di `Theme`.
+- Header: il nome coincide con l'`artifactId` del pom e con il repository; la tagline descrive
+  ciò che la schermata mostra, non il contesto del corso.
