@@ -23,7 +23,7 @@ si aggiunge in coda alla propria sezione, con il formato **Decisione / Motivazio
 | D11 | `Producer`: thread con quota condivisa | Classi | registrata |
 | D12 | Terminazione: poison pill inserite dal coordinatore | Classi | registrata |
 | D13 | `Consumer`: thread con registro locale degli item consumati | Classi | registrata |
-| D14 | Visualizzazione: rallentamento e osservazione dei thread | Simulazione | in definizione (vedi in fondo) |
+| D14 | Visualizzazione: osservazione dal vivo e rallentamento | Simulazione | in definizione |
 | D15 | Simulazione: `Scenario`, `Simulation`, configurazione e risultato | Simulazione | registrata |
 | D16 | Scenari: interfaccia `Scenario` e implementazioni | Simulazione | implementata |
 | D17 | TUI | TUI | in definizione |
@@ -297,6 +297,67 @@ che non la riceve viene fermato dal timeout (D2).
 **Conseguenze:** consumati = somma delle dimensioni delle liste; distinti = dimensione dell'insieme
 degli id di tutte le liste.
 
+### D14. Visualizzazione: osservazione dal vivo e rallentamento
+
+**Decisione:**
+- Interfaccia `SimulationListener` nel nucleo, con `onPut(String thread, Item item)` e
+  `onTake(String thread, Item item)`: producer e consumer notificano ogni operazione riuscita.
+  In assenza di osservatori si usa un listener che non fa nulla.
+- La TUI implementa il listener inserendo gli eventi in una coda thread-safe
+  (`ConcurrentLinkedQueue`), senza stampare. Un solo thread della TUI svuota la coda a intervalli
+  regolari, aggiorna la vista e ridisegna.
+- Rallentamento: parametro `delayMillis` di `SimulationConfig` (0 = nessuna pausa). Producer e
+  consumer eseguono `Thread.sleep(delayMillis)` dopo ogni operazione riuscita, fuori dal buffer.
+- `UnsafeBuffer` riceve una pausa `raceMillis` (costruttore) inserita tra la lettura e la
+  scrittura dello stato condiviso: `count` è aggiornato in tre passi espliciti (lettura, pausa,
+  scrittura), e lo stesso vale per `head` e `tail`. Lo scenario non sincronizzato passa
+  `delayMillis` come `raceMillis`; con 0 il comportamento coincide con D7.
+- Il listener riceve anche `beforePut(String thread)` e `beforeTake(String thread)`, notificati
+  da producer e consumer prima di chiamare il buffer. Stati mostrati dalla TUI: operazione
+  appena eseguita, in attesa (dentro il buffer oltre una soglia superiore alla durata normale
+  dell'operazione), in pausa.
+- Vista dal vivo attiva quando `delayMillis > 0`; con 0 la TUI mostra solo il risultato finale.
+- Layout della vista dal vivo: box del buffer (barra di riempimento, prodotti sul totale,
+  consumati, tempo trascorso), box dei thread (stato corrente e conteggio, al massimo 10 righe,
+  poi "... and N more"), box del log (ultimi 6 eventi). Il riempimento è ricavato dagli eventi
+  (put − take); la barra è scalata a 20 caratteri oltre capacità 20.
+- Il listener è passato dalla TUI allo scenario: `Scenario.run(SimulationConfig,
+  SimulationListener)`. `BufferScenario` lo passa a `Simulation`, che lo passa a producer e
+  consumer. Per misure e test si usa il listener che non fa nulla.
+- Lo scenario sequenziale notifica gli stessi eventi (a nome di `producer-1` e `consumer-1`) ed
+  esegue la stessa pausa dopo ogni operazione.
+
+**Motivazione:**
+- Il campionamento dello stato dei thread non dice chi ha fatto cosa e perde gli eventi tra un
+  campione e l'altro.
+- Un listener che stampa farebbe eseguire I/O al nucleo e scrivere più thread sul terminale
+  contemporaneamente.
+- Con la coda il nucleo resta senza I/O e un solo thread scrive sullo schermo. I thread della
+  simulazione producono eventi, la TUI li consuma.
+- Pausa nei thread e fuori dal buffer: i buffer non cambiano e le operazioni restano brevi, solo
+  più rare. Una pausa dentro il buffer, con il lock acquisito, renderebbe seriali i buffer
+  sicuri; una pausa nel listener sarebbe un effetto nascosto della TUI. `sleep` è interrompibile
+  e rispetta il timeout.
+- Con la pausa nei thread le operazioni sul buffer (circa 1 µs) quasi non si sovrappongono più:
+  lo scenario non sincronizzato rallentato non mostrerebbe errori. La pausa tra lettura e
+  scrittura allarga la finestra della race condition fino alla durata della pausa e rende
+  esplicita nel codice la non atomicità di lettura, modifica e scrittura.
+- Attesa ricavata dagli eventi di inizio: `Thread.getState()` non distingue la pausa
+  (`TIMED_WAITING`) dall'attesa sul buffer e l'attesa in polling resta `RUNNABLE`; eventi emessi
+  dai buffer richiederebbero di modificarli tutti e non sono possibili in `ArrayBlockingQueue`.
+- Un solo insieme di parametri e una sola regola: ritardo 0 per misurare, ritardo positivo per
+  osservare.
+- Il contenuto reale del buffer non è leggibile dall'esterno: una vista cella per cella,
+  ricostruita dagli eventi, mostrerebbe nello scenario non sincronizzato una coda ideale diversa
+  da quella reale. Il conteggio put − take indica quanti item dovrebbero essere presenti; le
+  discrepanze emergono nel risultato finale.
+- Sequenziale animato: la TUI non ha casi speciali; il buffer si riempie e si svuota
+  completamente a ogni giro e nessun thread attende, in contrasto con gli scenari concorrenti.
+
+**Vincoli già emersi:**
+- un ritardo per operazione riduce la sovrapposizione delle operazioni e quindi le perdite nello
+  scenario non sincronizzato: il ritardo deve essere un parametro, con valore 0 per la misura.
+
 ### D15. Simulazione: `Scenario`, `Simulation`, configurazione e risultato
 
 **Decisione:**
@@ -318,6 +379,7 @@ degli id di tutte le liste.
   | item totali | 0 | 1.000.000 |
   | capacità | 1 | 1.000 |
   | timeout (ms) | 100 | 60.000 |
+  | ritardo (ms) | 0 | 2.000 |
 
 - `SimulationResult`: totali (prodotti, consumati, distinti, persi, duplicati), dettaglio per
   thread (nome, conteggio, interruzione), item duplicati con numero di occorrenze, esito del
@@ -349,7 +411,8 @@ un nuovo buffer e una nuova `Simulation`.
 - Interfaccia `Scenario` con tre metodi:
   - `String getName()`: nome mostrato nel menu;
   - `String getDescription()`: breve spiegazione, in inglese, di cosa mostra lo scenario;
-  - `SimulationResult run(SimulationConfig config) throws InterruptedException`.
+  - `SimulationResult run(SimulationConfig config, SimulationListener listener) throws
+    InterruptedException` (listener aggiunto con D14).
 - Ogni chiamata a `run` crea un nuovo buffer con la capacità di `config` e una nuova `Simulation`.
 - Scenari basati su buffer: classe astratta `BufferScenario implements Scenario` con nome e
   descrizione passati al costruttore, metodo astratto `createBuffer(SimulationConfig)` e `run`
@@ -403,6 +466,32 @@ un nuovo buffer e una nuova `Simulation`.
 - Input a righe: l'utente digita una scelta e preme Invio. Ogni schermata pulisce il terminale
   (`ESC[2J`) e viene ridisegnata. Le scorciatoie del footer sono tasti seguiti da Invio
   (es. `1-5 run`, `q quit`).
+- Schermate: menu (elenco degli scenari) → dettaglio dello scenario (descrizione e parametri
+  correnti) → esecuzione → risultato → ritorno al dettaglio. Dal dettaglio: Invio esegue,
+  `p` apre i parametri, `b` torna al menu. I parametri sono condivisi tra tutti gli scenari.
+- Parametri: elenco numerato con valore corrente e limiti; l'utente sceglie il numero, poi
+  digita il nuovo valore. Valore non valido: messaggio breve in rosso e nuova richiesta dello
+  stesso valore. I limiti sono letti dalle costanti di `SimulationConfig`.
+- Valori predefiniti, costanti della TUI: 3 producer, 2 consumer, 40 item, capacità 5,
+  timeout 30.000 ms, ritardo 200 ms.
+- Risultato in una sola schermata: box dei totali (prodotti, consumati, distinti, persi,
+  duplicati, durata), box dei thread su più colonne (al massimo 8 righe, poi "... and N more"),
+  box dei duplicati (i primi 10, poi "... and N more"), riga di verdetto in verde se ogni item è
+  consumato una sola volta, altrimenti in rosso (item persi o duplicati, timeout, thread non
+  terminati).
+- Esecuzione: con ritardo 0 una riga fissa "Running <scenario>..." in testo secondario fino al
+  risultato. Con ritardo positivo, a fine run la vista dal vivo resta ferma sull'ultimo stato
+  con una riga di esito ("Done." in verde, "Stopped by timeout." in rosso); Invio apre il
+  risultato.
+- Larghezza fissa di 60 colonne (costante `WIDTH`), separatore del footer compreso.
+- Vista dal vivo: lo scenario è eseguito da un thread dedicato; `main` ripete svuotamento della
+  coda e ridisegno, attendendo il thread con `join(100)`, finché il thread è vivo, poi disegna
+  l'ultimo stato. Il risultato e un'eventuale eccezione del thread sono letti dopo il `join`.
+- Package `producerconsumer.tui`: `App` (`main`, collega `System.in`/`System.out`), `Tui` (ciclo
+  delle schermate, un metodo per schermata), `Theme` (colori, `WIDTH`, valori predefiniti),
+  `Box` (header, box con titolo, footer), `Parameters` (valori correnti, conversione in
+  `SimulationConfig`), `LiveView` (listener con coda, stato dei thread, righe della vista dal
+  vivo), `ResultView` (righe della schermata del risultato).
 
 **Motivazione:**
 - Java senza librerie legge l'input per righe. La lettura tasto per tasto richiede il raw mode
@@ -410,13 +499,30 @@ un nuovo buffer e una nuova `Simulation`.
   anomala lascerebbe il terminale senza eco.
 - Il ridisegno mantiene la struttura header / corpo / footer del design system.
 - Input e output passano da un `Reader` e da un `Writer`: i test sostituiscono il terminale.
-
-## Decisioni in definizione
-
-D14 (visualizzazione della simulazione) è rinviata a dopo `Consumer` e simulazione. Vincoli già
-emersi:
-- il nucleo non esegue I/O: l'osservazione avviene dalla TUI;
-- un ritardo per item riduce la sovrapposizione delle operazioni e quindi le perdite nello scenario
-  non sincronizzato: il ritardo deve essere un parametro, con valore 0 per la misura;
-- candidati: ritardo configurabile con campionamento di `Thread.getState()`, oppure eventi
-  notificati a un listener.
+- La descrizione è letta prima dell'esecuzione. Il ritorno al dettaglio permette di rieseguire
+  lo stesso scenario con un tasto (utile per lo scenario non sincronizzato, che varia a ogni run).
+  Parametri condivisi: gli scenari si confrontano a parità di condizioni.
+- Modifica di un parametro alla volta con i limiti visibili: nessun nome da ricordare, errore
+  circoscritto al valore appena inserito. Una sola fonte dei limiti.
+- Valori predefiniti pensati per la vista dal vivo: con più producer che consumer il buffer si
+  riempie e si osservano sia l'attesa su buffer vuoto (all'avvio) sia quella su buffer pieno.
+  Durata stimata: circa 4 s per i buffer corretti, circa 8 s per quello non sincronizzato
+  (pausa interna). Per la misura: ritardo 0, ad esempio 10.000 item con 2 producer e 2 consumer
+  (tra 1091 e 3477 item persi nello scenario non sincronizzato).
+- Risultato: il verdetto dà l'esito a colpo d'occhio, i box ne mostrano la causa. Il
+  troncamento mantiene la schermata entro un'altezza fissa anche con 50 + 50 thread o migliaia
+  di duplicati.
+- L'ultimo stato della vista dal vivo resta osservabile; ogni schermata attende l'utente. Nessun
+  thread di aggiornamento per l'esecuzione senza ritardo, che dura frazioni di secondo o al
+  massimo timeout + margine.
+- Larghezza fissa: Java non espone la larghezza del terminale; `COLUMNS` di norma non è
+  esportata e `stty size` dipende dal sistema ed è fragile sotto `mvn exec:java`. Output
+  identico a parità di input, quindi verificabile nei test. 60 colonne sono il minimo usato
+  anche in leva-sh.
+- `main` è l'unico thread che scrive sul terminale, per costruzione. `join(100)` è insieme
+  attesa e cadenza del ridisegno: alla fine del run ritorna subito e non c'è un thread di disegno
+  da fermare. Il `join` rende visibili a `main` i dati scritti dal thread.
+- Classi per responsabilità: la navigazione si legge in un solo file; la trasformazione di dati
+  in righe di testo (`Box`, `LiveView`, `ResultView`) è separata dall'I/O e verificabile senza
+  terminale. Una classe per schermata aumenterebbe le classi e richiederebbe di passare lo stato
+  condiviso tra le schermate.
