@@ -6,7 +6,7 @@
 PRD ricostruito dal codice esistente (reverse-engineering, tutte le funzionalità sono implementate).
 Fonti: sorgente in `src/main/java/producerconsumer`, test in `src/test/java`, `docs/design.md` (D1–D17),
 `README.md`, `docs/GUIDE.md`. Dove il codice diverge da design.md fa fede il codice; le divergenze sono
-elencate in [ANALYSIS](ANALYSIS.md), §6.
+elencate in [ANALYSIS](ANALYSIS.md), §5.
 
 ## 1. Problema
 
@@ -108,8 +108,8 @@ Colonna "Moduli": classi principali in [ARCHITECTURE](ARCHITECTURE.md), §3; mat
 | Scenari avviabili dal menu | 5 su 5 | `ScenariosTest`, `TuiTest` |
 | Scenari corretti | prodotti == consumati == distinti; persi = duplicati = 0 | `BufferScenarioTest`, `SimulationTest` (10.000 item, 4 producer, 3 consumer) |
 | Scenario non sincronizzato | termina senza eccezioni; con ritardo 0, 2 producer, 2 consumer, 10.000 item: tra 1091 e 3477 item persi (misura riportata in design.md D17) | osservazione manuale; nessun test asserisce il difetto |
-| Ritorno al menu | sempre, entro timeout + 1 s | `SimulationTest.timeoutStopsBlockedThreads`, `.reportsThreadsThatIgnoreInterrupt` |
-| Affidabilità della suite | stesso esito a ogni esecuzione | `mvn test`; 178 esecuzioni dichiarate in `README.md` (conteggio non riverificato in questa sessione) |
+| Ritorno al menu | negli scenari concorrenti sempre, entro timeout + 1 s; lo scenario sequenziale non applica il timeout (R-11 in [ANALYSIS](ANALYSIS.md)) | `SimulationTest.timeoutStopsBlockedThreads`, `.reportsThreadsThatIgnoreInterrupt` |
+| Affidabilità della suite | stesso esito a ogni esecuzione | `mvn test`: 178 test, 0 falliti (esecuzione del 2026-11-23) |
 | Leggibilità per lo studente | ogni classe comprensibile senza leggere le altre | giudizio dell'utente; [ARCHITECTURE](ARCHITECTURE.md) §3 |
 
 ## 8. Scope e out-of-scope

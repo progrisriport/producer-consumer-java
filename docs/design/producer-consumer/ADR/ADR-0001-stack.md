@@ -32,10 +32,8 @@ Vincoli che ne derivano:
   commenti in italiano impersonale.
 - Il vecchio progetto Eclipse resta recuperabile dal tag git `v0-eclipse-tui`.
 
-**Nota sulla versione di Java.** Il brief di questa sessione indicava Java 17; `pom.xml`, `README.md`,
-`docs/GUIDE.md` e `docs/design.md` indicano concordemente Java 21. Fa fede il codice: 21.
-Il sorgente non usa API successive a Java 17 (usa `List.of`, `List.copyOf`, nessun `record`,
-nessun pattern matching): abbassare `release` a 17 è probabilmente possibile ma non verificato.
+**Versione di Java.** `pom.xml` (`maven.compiler.release` = 21), `README.md`, `docs/GUIDE.md` e
+`docs/design.md` indicano concordemente Java 21.
 
 ## Conseguenze
 

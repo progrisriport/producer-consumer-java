@@ -4,8 +4,8 @@
 > Documenti: [PRD](PRD.md) · [ARCHITECTURE](ARCHITECTURE.md) · [BEHAVIOR](BEHAVIOR.md) · [DESIGN-PATTERNS](DESIGN-PATTERNS.md) · [DESIGN-IN-THE-SMALL](DESIGN-IN-THE-SMALL.md) · [ANALYSIS](ANALYSIS.md) · [ADR](ADR/ADR-0001-stack.md) · [DESIGN-STATUS](DESIGN-STATUS.md)
 
 Strategia di test **esistente**, ricostruita da `src/test/java` (JUnit 5.11.4, [ADR-0001](ADR/ADR-0001-stack.md)) e da
-`docs/design.md` (D3 e sezione "Test dei buffer"). La suite non è stata rieseguita in questa sessione:
-il conteggio di 178 esecuzioni è quello dichiarato in `README.md`.
+`docs/design.md` (D3 e sezione "Test dei buffer"). Esecuzione del 2026-11-23 con `mvn test`:
+178 test, 0 falliti, 0 errori, 0 ignorati.
 
 ## 1. Principi
 
@@ -115,9 +115,9 @@ costruire l'oggetto, asserire i getter, poi i casi limite.
 | Seed casuali | non servono: il codice non usa numeri casuali | — |
 | Fixture | nessuna persistente; ogni test crea buffer e thread propri | — |
 | Attese | `@Timeout` di classe (5, 10 o 15 s) + `join` con limite; `CountDownLatch` per sincronizzare i test sul primo evento | `join(200)` seguito da `assertFalse(isAlive())` entro 2 s dipende dalla velocità della macchina (R-10) |
-| Tempo | `LiveView` riceve `nowNanos`; i test di pausa usano solo limiti inferiori (`elapsed >= N`) | `timeoutStopsBlockedThreads` asserisce un limite superiore (`< 1200 ms`): sensibile a macchine sotto carico (R-10) |
-| Terminale | `Reader`/`Writer` iniettati; `Ansi.strip`; larghezza fissa | `String.format` con locale predefinito (R-9) |
-| Ambiente isolato | nessun container, nessun file esterno, nessuna rete | si può aggiungere un `Dockerfile`/wrapper Maven (miglioria, DT-1) |
+| Tempo | `LiveView` riceve `nowNanos`; i test di pausa usano solo limiti inferiori (`elapsed >= N`) | `timeoutStopsBlockedThreads` asserisce un limite superiore (`< 200 + GRACE_MILLIS` ms): sensibile a macchine sotto carico (R-10) |
+| Terminale | `Reader`/`Writer` iniettati; `Ansi.strip`; larghezza fissa | i colori dipendono dal supporto truecolor del terminale (R-9) |
+| Ambiente isolato | nessun container, nessun file esterno, nessuna rete | versione del JDK vincolata solo da `release=21`, senza Maven wrapper (DT-1) |
 | Scenario non sincronizzato | test sul solo contratto e sulla terminazione | il difetto è dimostrabile solo a mano |
 
 Comandi:

@@ -3,7 +3,7 @@
 > Progetto: producer-consumer · Data: 2026-11-23 · Versione: 1.0 · Stato: reviewed
 > Documenti: [PRD](PRD.md) · [ARCHITECTURE](ARCHITECTURE.md) · [BEHAVIOR](BEHAVIOR.md) · [DESIGN-IN-THE-SMALL](DESIGN-IN-THE-SMALL.md) · [TEST-STRATEGY](TEST-STRATEGY.md) · [ANALYSIS](ANALYSIS.md) · [ADR](ADR/ADR-0001-stack.md) · [DESIGN-STATUS](DESIGN-STATUS.md)
 
-I nomi dei pattern sono assegnati in fase di reverse-engineering: `docs/design.md` motiva le scelte
+I nomi dei pattern sono assegnati in questa documentazione: `docs/design.md` motiva le scelte
 ma non le etichetta con i nomi del catalogo GoF. Le alternative scartate sono quelle registrate in
 design.md (indicate con la D); dove manca una motivazione esplicita è segnalato.
 Tutte le implementazioni rispettano lo stile di [ADR-0017](ADR/ADR-0017-stile-codice-classico.md):
@@ -33,7 +33,7 @@ dove il pattern userebbe una lambda si usa una classe anonima.
 | `tui.Tui` (costruttore con `Reader`/`Writer`) | **Dependency Injection** del terminale | I test sostituiscono `System.in`/`System.out` (D17) | Uso diretto di `System.in`/`System.out` | Nessuno rilevante |
 | `tui.Theme`, `tui.Box`, `tui.ResultView`, `scenario.Scenarios` | **Utility class non istanziabile** (costruttore privato, metodi statici) | Un solo punto per le sequenze ANSI e per le costanti (D17) | Istanze con stato | Metodi statici: non sostituibili nei test (non necessario) |
 
-## 2. Pattern richiesti dal brief: dove sono
+## 2. Pattern principali: dove sono
 
 | Pattern | Dove | Come si riconosce nel codice |
 |---|---|---|

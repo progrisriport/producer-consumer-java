@@ -4,7 +4,7 @@
 > Documenti: [PRD](../PRD.md) · [TEST-STRATEGY](../TEST-STRATEGY.md) · [ANALYSIS](../ANALYSIS.md) · [DESIGN-STATUS](../DESIGN-STATUS.md)
 
 **Stato:** accettato, implementato
-**Decisioni di origine:** D3 (invarianti e timeout), sezione "Test dei buffer" di design.md (risposta alla questione aperta di D3).
+**Decisioni di origine:** D3 (invarianti e timeout), sezione "Test dei buffer" di design.md (definisce come si verifica un'attesa).
 
 ## Contesto
 

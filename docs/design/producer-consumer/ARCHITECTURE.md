@@ -94,7 +94,7 @@ flowchart TD
 Le frecce sono gli `import` reali (verificati sul sorgente); il grafo è aciclico. Ordine topologico:
 `model` → (`buffer`, `counter`, `event`) → `actor` → `simulation` → `scenario` → `tui`.
 Il diagramma in `docs/GUIDE.md` §4 omette gli archi `scenario → buffer/counter/event/model`,
-usati da `SequentialScenario`: divergenza minore (vedi [ANALYSIS](ANALYSIS.md), §6).
+usati da `SequentialScenario`: divergenza minore (vedi [ANALYSIS](ANALYSIS.md), §5).
 
 `event` è separato da `simulation` perché `actor` (che notifica) e `simulation` (che lo passa agli attori)
 non devono formare un ciclo ([ADR-0013](ADR/ADR-0013-osservazione-eventi.md)).

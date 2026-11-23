@@ -24,7 +24,7 @@ Il totale di item prodotti deve essere fisso e indipendente dal numero di produc
 - La ripartizione per producer varia tra esecuzioni: si verifica solo il totale.
 - Limite noto: chiamare `run()` invece di `start()` esegue il corpo nel thread chiamante senza errori.
 - `produced++` dopo il `put`: un put interrotto non conta come prodotto.
-- Il contatore `remaining` può scendere sotto zero (ogni valore `<= 0` = esaurita); con 2^31 chiamate ripetute potrebbe andare in overflow: irrilevante in pratica, quota limitata a 1.000.000 e producer che escono al primo `false`.
+- Il contatore `remaining` può scendere sotto zero (ogni valore `<= 0` = esaurita); ogni producer esce al primo `false`, quindi dopo l'esaurimento il contatore scende al massimo del numero di producer (≤ 50) e non raggiunge l'overflow.
 
 ## Alternative scartate
 
