@@ -101,10 +101,26 @@ the timeout. Implementation details are in section 6.
 outside the buffer: it slows the run down without changing the synchronization. The value also
 selects what the screen shows:
 
-- **Delay 0** (measuring): the run is executed at full speed; the screen shows "Running ..." and
-  then the result.
 - **Delay above 0** (observing): the run is shown live. At the end the last frame stays on screen
   with "Done." (green) or "Stopped by timeout." (red); Enter opens the result.
+- **Delay 0** (measuring): the run is executed at full speed; the screen shows "Running ..." and
+  then the result.
+
+The delay exists for the simulation, not for the problem: without it a run of 40 items ends in a
+few milliseconds and nothing can be followed on screen. With a positive delay the elapsed time is
+almost entirely made of pauses. With the defaults each consumer takes about 20 items and pauses
+200 ms after each one, about 4 s in total, while a synchronized `put` or `take` costs a few
+microseconds. Monitor, Lock and Condition and Blocking queue therefore show the same elapsed time:
+in this mode the time does not compare the strategies.
+
+With delay 0 the elapsed time measures the cost of the synchronization itself and gives an
+indication of which solution is more efficient. Useful settings: a large number of items (for
+example 1,000,000), then different capacities (for example 5 and 100) and different numbers of
+producers and consumers, since the ranking of the strategies changes with them. Lock and Condition
+and Blocking queue have the same structure (one lock, two conditions) and give similar times.
+The values depend on the machine and vary between runs: repeat each run a few times and compare
+the ranges, not single values. The application is not a benchmark tool: it measures one run at a
+time, without JVM warm-up.
 
 In the Unsynchronized scenario the delay has a second effect: it is also the pause inside `put` and
 `take` of `UnsafeBuffer`, between reading and writing `count`, `head` and `tail` (`raceMillis`,
