@@ -57,22 +57,58 @@ by all scenarios, so scenarios can be compared under the same conditions.
 
 ### 2.2 Parameters
 
-| # | Parameter | Default | Range |
-|---|---|---|---|
-| 1 | Producers | 3 | 1 to 50 |
-| 2 | Consumers | 2 | 1 to 50 |
-| 3 | Items | 40 | 0 to 1,000,000 |
-| 4 | Buffer capacity | 5 | 1 to 1,000 |
-| 5 | Timeout (ms) | 30,000 | 100 to 60,000 |
-| 6 | Delay (ms) | 200 | 0 to 2,000 |
+| # | Parameter | Default | Range | Meaning |
+|---|---|---|---|---|
+| 1 | Producers | 3 | 1 to 50 | Number of producer threads |
+| 2 | Consumers | 2 | 1 to 50 | Number of consumer threads |
+| 3 | Items | 40 | 0 to 1,000,000 | Total items produced in the run, shared by all producers |
+| 4 | Buffer capacity | 5 | 1 to 1,000 | Maximum number of items the buffer holds at the same time |
+| 5 | Timeout (ms) | 30,000 | 100 to 60,000 | Maximum duration of the whole run; when it expires the run is stopped |
+| 6 | Delay (ms) | 200 | 0 to 2,000 | Pause of every producer and consumer after each successful operation; also selects live view or result only |
 
-Ranges are the constants of `SimulationConfig`; defaults are constants of `Theme`.
+Ranges are the constants of `SimulationConfig`; defaults are constants of `Theme`. The values are
+shared by all scenarios. The Sequential scenario uses only Items, Buffer capacity and Delay
+(section 3.1).
+
+**Producers and Consumers.** Each producer is a thread named `producer-N`, each consumer a thread
+named `consumer-N`. All of them share one buffer.
+
+**Items.** A single quota of items is shared by all producers: each producer asks for a permit
+before producing an item, and the run produces exactly Items items in total. Faster producers
+produce more. With 0 the producers stop immediately and the consumers only receive the poison
+pills.
+
+**Buffer capacity.** A `put` on a full buffer waits until a consumer takes an item; a `take` on an
+empty buffer waits until a producer puts one. A small capacity makes these waits frequent and
+visible in the live view.
+
+**Timeout.** Safety limit on the duration of the run, measured from its start with a single
+deadline (it does not restart between phases). It exists because a run can fail to terminate: in
+the Unsynchronized scenario a poison pill can be overwritten, and the consumer that misses it would
+wait forever. When the deadline expires:
+
+1. every thread still alive is interrupted;
+2. the run waits at most 1 more second (`Simulation.GRACE_MILLIS`) for the threads to exit;
+3. the result is built from what was done so far and the verdict reports "stopped by timeout";
+   interrupted threads are marked with `*`.
+
+A run therefore lasts at most about Timeout + 1 s. The timeout can also expire in a correct
+scenario when the delay makes the run too long: for example Monitor with 40 items, 1 consumer and
+delay 2,000 ms needs about 80 s, more than the default 30 s. The Sequential scenario does not apply
+the timeout. Implementation details are in section 6.
+
+**Delay.** Pause that every producer and consumer makes after each successful `put` or `take`,
+outside the buffer: it slows the run down without changing the synchronization. The value also
+selects what the screen shows:
 
 - **Delay 0** (measuring): the run is executed at full speed; the screen shows "Running ..." and
   then the result.
-- **Delay above 0** (observing): every producer and consumer pauses for the delay after each
-  successful operation, and the run is shown live. At the end the last frame stays on screen with
-  "Done." (green) or "Stopped by timeout." (red); Enter opens the result.
+- **Delay above 0** (observing): the run is shown live. At the end the last frame stays on screen
+  with "Done." (green) or "Stopped by timeout." (red); Enter opens the result.
+
+In the Unsynchronized scenario the delay has a second effect: it is also the pause inside `put` and
+`take` of `UnsafeBuffer`, between reading and writing `count`, `head` and `tail` (`raceMillis`,
+section 3.2). A longer delay widens the race window and produces more lost and duplicated items.
 
 With the defaults, the correct scenarios take about 4 s, the unsynchronized one about 9 s and the
 sequential one about 16 s (one thread, a pause after every put and every take).
