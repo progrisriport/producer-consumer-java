@@ -3,9 +3,9 @@
 > Progetto: producer-consumer · Data: 2026-11-23 · Versione: 1.0 · Stato: reviewed
 > Documenti: [PRD](PRD.md) · [ARCHITECTURE](ARCHITECTURE.md) · [BEHAVIOR](BEHAVIOR.md) · [DESIGN-PATTERNS](DESIGN-PATTERNS.md) · [DESIGN-IN-THE-SMALL](DESIGN-IN-THE-SMALL.md) · [ANALYSIS](ANALYSIS.md) · [ADR](ADR/ADR-0001-stack.md) · [DESIGN-STATUS](DESIGN-STATUS.md)
 
-Strategia di test **esistente**, ricostruita da `src/test/java` (JUnit 5.11.4, [ADR-0001](ADR/ADR-0001-stack.md)) e da
-`docs/design.md` (D3 e sezione "Test dei buffer"). Esecuzione del 2026-11-23 con `mvn test`:
-178 test, 0 falliti, 0 errori, 0 ignorati.
+Strategia di test della versione attuale del codice: suite in `src/test/java` (JUnit 5.11.4,
+[ADR-0001](ADR/ADR-0001-stack.md)), motivata da `docs/design.md` (D3 e sezione "Test dei buffer").
+La suite conta 178 test, tutti verdi.
 
 ## 1. Principi
 

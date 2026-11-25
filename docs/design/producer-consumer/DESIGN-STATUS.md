@@ -1,6 +1,6 @@
 # DESIGN-STATUS — producer-consumer
 
-Documentazione del design ricostruita dal codice esistente e completo. Data: 2026-11-23.
+Documentazione di progetto della versione attuale dell'applicazione. Data: 2026-11-25.
 
 ## Documenti
 
@@ -15,8 +15,7 @@ Documentazione del design ricostruita dal codice esistente e completo. Data: 202
 | Limiti noti, debito tecnico, divergenze | [ANALYSIS](ANALYSIS.md) | completo |
 | Decisioni | [ADR-0001](ADR/ADR-0001-stack.md) … ADR-0017 | completo |
 
-Riferimenti incrociati R-*, DT-*, V-* verificati tra i documenti. Suite eseguita il 2026-11-23:
-178 test, 0 falliti.
+Riferimenti incrociati R-*, DT-*, V-* coerenti tra i documenti. Suite: 178 test, tutti verdi.
 
 ## Quality gate
 

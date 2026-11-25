@@ -4,13 +4,14 @@
 > Documenti: [PRD](PRD.md) · [ARCHITECTURE](ARCHITECTURE.md) · [BEHAVIOR](BEHAVIOR.md) · [DESIGN-PATTERNS](DESIGN-PATTERNS.md) · [DESIGN-IN-THE-SMALL](DESIGN-IN-THE-SMALL.md) · [TEST-STRATEGY](TEST-STRATEGY.md) · [ADR](ADR/ADR-0001-stack.md) · [DESIGN-STATUS](DESIGN-STATUS.md)
 
 Limiti noti, dipendenze, debito tecnico, valutazione dei requisiti trasversali e divergenze tra codice e
-`docs/design.md`, riferiti al codice del commit corrente. In caso di divergenza fa fede il codice.
+`docs/design.md`, riferiti alla versione attuale del codice. Le divergenze del §5 indicano punti in
+cui il testo di `design.md` non corrisponde più al codice.
 
 ## Fonti
 
 - Codice: 30 file in `src/main`, 26 in `src/test`, 8 package.
 - Motivazioni: `docs/design.md` (D1–D17), `README.md`, `docs/GUIDE.md`.
-- Suite eseguita il 2026-11-23 con `mvn test`: 178 test, 0 falliti, 0 errori, 0 ignorati.
+- Suite (`mvn test`): 178 test, 0 falliti, 0 errori, 0 ignorati.
 
 ## 1. Limiti noti
 

@@ -21,7 +21,7 @@ Gli item passano tra thread senza copia; serve un segnale di fine flusso che non
 - Immutabile: condivisibile tra thread senza sincronizzazione.
 - `producerId` permette di mostrare da quale producer proviene un duplicato.
 - **Asimmetria nota:** `new Item(-1, -1).equals(Item.POISON)` è `true`, ma `new Item(-1, -1).isPoison()` è `false`. Il costruttore pubblico non impedisce id negativi. Con il codice attuale nessun producer genera −1 (gli id partono da 0), quindi il problema è latente: rischio R-8 in [ANALYSIS](../ANALYSIS.md).
-- design.md non menziona il confronto per identità: dettaglio ricavato dal codice.
+- design.md non menziona il confronto per identità (V-6 in [ANALYSIS](../ANALYSIS.md)).
 
 ## Alternative scartate
 

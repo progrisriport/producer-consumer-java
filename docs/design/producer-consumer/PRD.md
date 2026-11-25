@@ -1,12 +1,16 @@
 # PRD — producer-consumer
 
-> Progetto: producer-consumer · Data: 2026-11-23 · Versione: 1.0 · Stato: reviewed
+> Progetto: producer-consumer · Data: 2026-11-25 · Versione: 1.1 · Stato: approvato
 > Documenti: [ARCHITECTURE](ARCHITECTURE.md) · [BEHAVIOR](BEHAVIOR.md) · [DESIGN-PATTERNS](DESIGN-PATTERNS.md) · [DESIGN-IN-THE-SMALL](DESIGN-IN-THE-SMALL.md) · [TEST-STRATEGY](TEST-STRATEGY.md) · [ANALYSIS](ANALYSIS.md) · [ADR](ADR/ADR-0001-stack.md) · [DESIGN-STATUS](DESIGN-STATUS.md)
 
-PRD ricostruito dal codice esistente (reverse-engineering, tutte le funzionalità sono implementate).
-Fonti: sorgente in `src/main/java/producerconsumer`, test in `src/test/java`, `docs/design.md` (D1–D17),
-`README.md`, `docs/GUIDE.md`. Dove il codice diverge da design.md fa fede il codice; le divergenze sono
-elencate in [ANALYSIS](ANALYSIS.md), §5.
+Documento dei requisiti del progetto: definisce cosa fa l'applicazione, per chi e con quali qualità.
+È il riferimento dell'intero progetto e descrive la versione attuale del codice: ogni requisito
+elencato è implementato e verificato dalla suite di test.
+
+- Una modifica ai requisiti si registra qui insieme alla modifica del codice e dei test, così che
+  documento e codice restino allineati.
+- La colonna "Origine" indica la decisione di [design.md](../../design.md) (D1–D17) che motiva il
+  requisito; la colonna "Moduli" indica dove è realizzato ([ARCHITECTURE](ARCHITECTURE.md) §3 e §7).
 
 ## 1. Problema
 
@@ -72,7 +76,7 @@ Colonna "Moduli": classi principali in [ARCHITECTURE](ARCHITECTURE.md), §3; mat
 | FR-4 | Lo scenario Monitor usa `synchronized` + `wait`/`notifyAll`: ogni item è consumato esattamente una volta | D8 | `MonitorBuffer`, `MonitorScenario` |
 | FR-5 | Lo scenario Lock and Condition usa `ReentrantLock` e due `Condition`: ogni item è consumato esattamente una volta | D8 | `LockBuffer`, `LockScenario` |
 | FR-6 | Lo scenario Blocking queue usa `ArrayBlockingQueue`: ogni item è consumato esattamente una volta | D9 | `BlockingQueueBuffer`, `BlockingQueueScenario` |
-| FR-7 | I parametri (producer, consumer, item, capacità, timeout, ritardo) sono modificabili con limiti visibili e condivisi tra gli scenari | D15, D17 | `Parameters`, `SimulationConfig`, `Tui` |
+| FR-7 | I parametri (producer, consumer, item, capacità, timeout, ritardo) sono modificabili con limiti visibili e condivisi tra gli scenari; il significato di ciascuno è descritto in `docs/GUIDE.md` §2.2 | D15, D17 | `Parameters`, `SimulationConfig`, `Tui` |
 | FR-8 | Un run funziona con qualsiasi numero di producer e consumer (anche più consumer che producer); il totale degli item prodotti è fisso | D11, D12 | `Simulation`, `Producer`, `Consumer`, `Quota` |
 | FR-9 | I consumer terminano tramite una poison pill per consumer inserita dal coordinatore dopo la fine dei producer | D12 | `Simulation`, `Consumer`, `Item` |
 | FR-10 | Un timeout interrompe i thread ancora vivi; il run ritorna entro timeout + 1 s e l'applicazione torna al menu | D2, D15 | `Simulation`, `Tui` |
@@ -109,12 +113,12 @@ Colonna "Moduli": classi principali in [ARCHITECTURE](ARCHITECTURE.md), §3; mat
 | Scenari corretti | prodotti == consumati == distinti; persi = duplicati = 0 | `BufferScenarioTest`, `SimulationTest` (10.000 item, 4 producer, 3 consumer) |
 | Scenario non sincronizzato | termina senza eccezioni; con ritardo 0, 2 producer, 2 consumer, 10.000 item: tra 1091 e 3477 item persi (misura riportata in design.md D17) | osservazione manuale; nessun test asserisce il difetto |
 | Ritorno al menu | negli scenari concorrenti sempre, entro timeout + 1 s; lo scenario sequenziale non applica il timeout (R-11 in [ANALYSIS](ANALYSIS.md)) | `SimulationTest.timeoutStopsBlockedThreads`, `.reportsThreadsThatIgnoreInterrupt` |
-| Affidabilità della suite | stesso esito a ogni esecuzione | `mvn test`: 178 test, 0 falliti (esecuzione del 2026-11-23) |
+| Affidabilità della suite | stesso esito a ogni esecuzione, nessun test fallito | `mvn test` |
 | Leggibilità per lo studente | ogni classe comprensibile senza leggere le altre | giudizio dell'utente; [ARCHITECTURE](ARCHITECTURE.md) §3 |
 
 ## 8. Scope e out-of-scope
 
-**In scope (implementato):** i cinque scenari; menu, dettaglio, parametri, vista dal vivo, risultato;
+**In scope:** i cinque scenari; menu, dettaglio, parametri, vista dal vivo, risultato;
 nucleo concorrente (`Simulation`, buffer, attori, contatori); suite di test; documentazione
 (`README.md`, `docs/GUIDE.md`, `docs/design.md`, questa cartella).
 

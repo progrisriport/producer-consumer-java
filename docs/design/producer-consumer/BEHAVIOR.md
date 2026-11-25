@@ -3,7 +3,7 @@
 > Progetto: producer-consumer · Data: 2026-11-23 · Versione: 1.0 · Stato: reviewed
 > Documenti: [PRD](PRD.md) · [ARCHITECTURE](ARCHITECTURE.md) · [DESIGN-PATTERNS](DESIGN-PATTERNS.md) · [DESIGN-IN-THE-SMALL](DESIGN-IN-THE-SMALL.md) · [TEST-STRATEGY](TEST-STRATEGY.md) · [ANALYSIS](ANALYSIS.md) · [ADR](ADR/ADR-0001-stack.md) · [DESIGN-STATUS](DESIGN-STATUS.md)
 
-Vista dinamica ricostruita dal codice: sequence diagram, state diagram e activity diagram.
+Vista dinamica della versione attuale del codice: sequence diagram, state diagram e activity diagram.
 La struttura statica (package, classi) è in [ARCHITECTURE](ARCHITECTURE.md).
 
 Indice: §1 sequence di un run completo · §2 sequence della terminazione per timeout ·

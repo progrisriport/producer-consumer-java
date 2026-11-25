@@ -3,8 +3,8 @@
 > Progetto: producer-consumer · Data: 2026-11-23 · Versione: 1.0 · Stato: reviewed
 > Documenti: [PRD](PRD.md) · [BEHAVIOR](BEHAVIOR.md) · [DESIGN-PATTERNS](DESIGN-PATTERNS.md) · [DESIGN-IN-THE-SMALL](DESIGN-IN-THE-SMALL.md) · [TEST-STRATEGY](TEST-STRATEGY.md) · [ANALYSIS](ANALYSIS.md) · [ADR](ADR/ADR-0001-stack.md) · [DESIGN-STATUS](DESIGN-STATUS.md)
 
-Documento ricostruito dal codice in `src/main/java/producerconsumer` (reverse-engineering). Le
-decisioni D1–D17 di `docs/design.md` sono citate tramite gli ADR. Il comportamento dinamico
+Architettura della versione attuale del codice in `src/main/java/producerconsumer`, che realizza i
+requisiti del [PRD](PRD.md). Le decisioni D1–D17 di `docs/design.md` sono citate tramite gli ADR. Il comportamento dinamico
 (sequence, state, activity) è in [BEHAVIOR](BEHAVIOR.md).
 
 ## 1. Vista C4
