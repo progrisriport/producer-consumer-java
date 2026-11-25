@@ -120,7 +120,7 @@ producers and consumers, since the ranking of the strategies changes with them. 
 and Blocking queue have the same structure (one lock, two conditions) and give similar times.
 The values depend on the machine and vary between runs: repeat each run a few times and compare
 the ranges, not single values. The application is not a benchmark tool: it measures one run at a
-time, without JVM warm-up.
+time, and the first runs after start-up are slower because the JVM is still compiling the code.
 
 In the Unsynchronized scenario the delay has a second effect: it is also the pause inside `put` and
 `take` of `UnsafeBuffer`, between reading and writing `count`, `head` and `tail` (`raceMillis`,
